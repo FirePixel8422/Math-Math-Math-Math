@@ -18,8 +18,12 @@ public static class TextureCalculator
             bool[] activeFaces = activeFacesPerCube[cubeIndex];
 
             // Calculate the offset in the atlas for the current cube
-            int row = cubeIndex / atlasSize; // Which row in the atlas
-            int col = cubeIndex % atlasSize; // Which column in the atlas
+            int textureIdx = textureIndex[cubeIndex]; // Get the texture index for the current cube
+            int row = textureIdx / atlasSize; // Which row in the atlas
+            int col = textureIdx % atlasSize; // Which column in the atlas
+
+            Debug.Log(row);
+            Debug.Log(col);
 
             float uOffset = col * texelSize; // U offset
             float vOffset = row * texelSize; // V offset
@@ -72,10 +76,10 @@ public static class TextureCalculator
                             break;
 
                         case 5: // Right face
-                            uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
-                            uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
-                            uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
-                            uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
+                            uvs[vertexIndex + 0] = new Vector2(uOffset + texelSize, vOffset); // Bottom left
+                            uvs[vertexIndex + 1] = new Vector2(uOffset + 2 * texelSize, vOffset); // Bottom right
+                            uvs[vertexIndex + 2] = new Vector2(uOffset + 2 * texelSize, vOffset + texelSize); // Top right
+                            uvs[vertexIndex + 3] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top left
                             vertexIndex += 4;
                             break;
                     }
@@ -92,4 +96,5 @@ public static class TextureCalculator
             Debug.Log(uv);
         }
     }
+
 }

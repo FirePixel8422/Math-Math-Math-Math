@@ -47,6 +47,11 @@ public class MeshCalculator : MonoBehaviour
 
         int[] textureIndexs = new int[gridPositions.Count];
 
+        for (int i = 0; i < textureIndexs.Length; i++)
+        {
+            textureIndexs[i] = i;
+        }
+
         List<bool[]> activeFacesPerCube = new List<bool[]>();
         for (int i = 0; i < gridPositions.Count; i++)
         {
