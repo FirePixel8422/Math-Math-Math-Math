@@ -1,10 +1,13 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
 public static class TextureCalculator
 {
-    public static void GenerateBoxMappingUVs(Mesh mesh, List<bool[]> activeFacesPerCube, int[] textureIndex, int atlasSize)
+    public async static Task GenerateBoxMappingUVs(Mesh mesh, List<bool[]> activeFacesPerCube, int[] textureIndex, int atlasSize)
     {
+        await Task.Delay(0);
+
         // Get the vertices of the mesh
         Vector3[] vertices = mesh.vertices;
         Vector2[] uvs = new Vector2[vertices.Length];
@@ -22,8 +25,6 @@ public static class TextureCalculator
             int row = textureIdx / atlasSize; // Which row in the atlas
             int col = textureIdx % atlasSize; // Which column in the atlas
 
-            Debug.Log(row);
-            Debug.Log(col);
 
             float uOffset = col * texelSize; // U offset
             float vOffset = row * texelSize; // V offset
@@ -35,7 +36,7 @@ public static class TextureCalculator
                 {
                     switch (faceIndex)
                     {
-                        case 0: // Front face
+                        case 0: // back
                             uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
                             uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
                             uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
@@ -43,7 +44,7 @@ public static class TextureCalculator
                             vertexIndex += 4; // Move to the next face's vertices
                             break;
 
-                        case 1: // Back face
+                        case 1: // front
                             uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
                             uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
                             uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
@@ -51,15 +52,7 @@ public static class TextureCalculator
                             vertexIndex += 4;
                             break;
 
-                        case 2: // Top face
-                            uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset + texelSize); // Bottom left
-                            uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Bottom right
-                            uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + 2 * texelSize); // Top right
-                            uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + 2 * texelSize); // Top left
-                            vertexIndex += 4;
-                            break;
-
-                        case 3: // Bottom face
+                        case 2: // right
                             uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
                             uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
                             uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
@@ -67,7 +60,7 @@ public static class TextureCalculator
                             vertexIndex += 4;
                             break;
 
-                        case 4: // Left face
+                        case 3: // left
                             uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
                             uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
                             uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
@@ -75,11 +68,19 @@ public static class TextureCalculator
                             vertexIndex += 4;
                             break;
 
-                        case 5: // Right face
-                            uvs[vertexIndex + 0] = new Vector2(uOffset + texelSize, vOffset); // Bottom left
-                            uvs[vertexIndex + 1] = new Vector2(uOffset + 2 * texelSize, vOffset); // Bottom right
-                            uvs[vertexIndex + 2] = new Vector2(uOffset + 2 * texelSize, vOffset + texelSize); // Top right
-                            uvs[vertexIndex + 3] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top left
+                        case 4: // top
+                            uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
+                            uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
+                            uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
+                            uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
+                            vertexIndex += 4;
+                            break;
+
+                        case 5: // bottom
+                            uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
+                            uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
+                            uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
+                            uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
                             vertexIndex += 4;
                             break;
                     }
@@ -89,12 +90,6 @@ public static class TextureCalculator
 
         // Assign UVs to the mesh
         mesh.uv = uvs;
-
-        // Debug the UVs
-        foreach (var uv in uvs)
-        {
-            Debug.Log(uv);
-        }
     }
 
 }
