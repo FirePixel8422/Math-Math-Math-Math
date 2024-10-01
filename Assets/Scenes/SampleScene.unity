@@ -343,7 +343,7 @@ MonoBehaviour:
   cubeSize: 1
   atlasSize: 3
   randomSpawnAmount: 100000
-  spawnBounds: {x: 16, y: 100, z: 16}
+  spawnBounds: {x: 16, y: 200, z: 16}
   drawBoundsGizmos: 1
   drawGridGizmos: 0
   gridGizmoColor: {r: 1, g: 1, b: 1, a: 1}
