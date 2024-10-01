@@ -8,14 +8,19 @@ public class MeshCalculator : MonoBehaviour
 {
     public List<Vector3> blockPositions;
     public Vector3 cubeSize = new Vector3(1, 1, 1);
+
     public MeshRenderer meshRenderer;
     public MeshFilter meshFilter;
+
     public bool autoUpdate;
+
+    public int atlasSize;
+
+
 
     private void Start()
     {
         CreateCombinedMesh(blockPositions);
-        Debug.Log("Mesh generated.");
     }
 
     private void OnValidate()
@@ -25,20 +30,37 @@ public class MeshCalculator : MonoBehaviour
             Invoke(nameof(CallSendMessage), 0.1f); // Delay for next frame
         }
     }
-
     private void CallSendMessage()
     {
         CreateCombinedMesh(blockPositions);
-        Debug.Log("Mesh updated.");
     }
+
+
 
     public void CreateCombinedMesh(List<Vector3> gridPositions)
     {
+        if (gridPositions.Count == 0 || atlasSize == 0)
+        {
+            Debug.LogWarning("Cant Create Mesh, No Positions Added To List Or Atlas Size is < 1");
+            return;
+        }
+
+        int[] textureIndexs = new int[gridPositions.Count];
+
+        List<bool[]> activeFacesPerCube = new List<bool[]>();
+        for (int i = 0; i < gridPositions.Count; i++)
+        {
+            activeFacesPerCube.Add(new bool[6]);
+        }
+        
+
         List<Vector3> vertices = new List<Vector3>();
         List<int> triangles = new List<int>();
 
         int vertexOffset = 0; // To track the offset of the vertices for triangle indices
 
+
+        int cubeIndex = 0;
         foreach (Vector3 gridPosition in gridPositions)
         {
             // Calculate half size of the cube
@@ -104,6 +126,8 @@ public class MeshCalculator : MonoBehaviour
             // Add face vertices and triangles if the face is visible
             if (backFaceVisible)
             {
+                activeFacesPerCube[cubeIndex][0] = true;
+
                 sortedFaceVertices.AddRange(new Vector3[] { faceVertices[0], faceVertices[1], faceVertices[2], faceVertices[3] });
                 int[] faceTriangles = new int[] {
                     vertexOffset + 2 - faceMissedVertOffset, vertexOffset + 1 - faceMissedVertOffset, vertexOffset + 0 - faceMissedVertOffset,
@@ -118,6 +142,8 @@ public class MeshCalculator : MonoBehaviour
 
             if (frontFaceVisible)
             {
+                activeFacesPerCube[cubeIndex][1] = true;
+
                 sortedFaceVertices.AddRange(new Vector3[] { faceVertices[4], faceVertices[5], faceVertices[6], faceVertices[7] });
                 int[] faceTriangles = new int[] {
                     vertexOffset + 5 - faceMissedVertOffset, vertexOffset + 6 - faceMissedVertOffset, vertexOffset + 4 - faceMissedVertOffset,
@@ -132,6 +158,8 @@ public class MeshCalculator : MonoBehaviour
 
             if (rightFaceVisible)
             {
+                activeFacesPerCube[cubeIndex][2] = true;
+
                 sortedFaceVertices.AddRange(new Vector3[] { faceVertices[8], faceVertices[9], faceVertices[10], faceVertices[11] });
                 int[] faceTriangles = new int[] {
                     vertexOffset + 10 - faceMissedVertOffset, vertexOffset + 9 - faceMissedVertOffset, vertexOffset + 8 - faceMissedVertOffset,
@@ -146,6 +174,8 @@ public class MeshCalculator : MonoBehaviour
 
             if (leftFaceVisible)
             {
+                activeFacesPerCube[cubeIndex][3] = true;
+
                 sortedFaceVertices.AddRange(new Vector3[] { faceVertices[12], faceVertices[13], faceVertices[14], faceVertices[15] });
                 int[] faceTriangles = new int[] {
                     vertexOffset + 13 - faceMissedVertOffset, vertexOffset + 14 - faceMissedVertOffset, vertexOffset + 12 - faceMissedVertOffset,
@@ -160,6 +190,8 @@ public class MeshCalculator : MonoBehaviour
 
             if (topFaceVisible)
             {
+                activeFacesPerCube[cubeIndex][4] = true;
+
                 sortedFaceVertices.AddRange(new Vector3[] { faceVertices[16], faceVertices[17], faceVertices[18], faceVertices[19] });
                 int[] faceTriangles = new int[] {
                     vertexOffset + 16 - faceMissedVertOffset, vertexOffset + 18 - faceMissedVertOffset, vertexOffset + 17 - faceMissedVertOffset,
@@ -174,6 +206,8 @@ public class MeshCalculator : MonoBehaviour
 
             if (bottomFaceVisible)
             {
+                activeFacesPerCube[cubeIndex][5] = true;
+
                 sortedFaceVertices.AddRange(new Vector3[] { faceVertices[20], faceVertices[21], faceVertices[22], faceVertices[23] });
                 int[] faceTriangles = new int[] {
                     vertexOffset + 20 - faceMissedVertOffset, vertexOffset + 21 - faceMissedVertOffset, vertexOffset + 22 - faceMissedVertOffset,
@@ -191,19 +225,29 @@ public class MeshCalculator : MonoBehaviour
             triangles.AddRange(sortedFaceTriangles);
 
             vertexOffset += 24 - faceMissedVertOffset;
+
+
+            //for loop
+            cubeIndex += 1;
         }
 
-        print(triangles.Count / 6 + " Planes");
+        
 
         // Create a new mesh and assign the vertices, triangles, and normals
         Mesh mesh = new Mesh();
         mesh.vertices = vertices.ToArray();
         mesh.triangles = triangles.ToArray();
 
-        mesh.RecalculateNormals();
+        TextureCalculator.GenerateBoxMappingUVs(mesh, activeFacesPerCube, textureIndexs, atlasSize);
 
-        // Assign the created mesh to the mesh filter
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
         meshFilter.mesh = mesh;
+
+
+
+        print("Mesh Generated with" + triangles.Count / 6 + " Planes");
     }
 
 
