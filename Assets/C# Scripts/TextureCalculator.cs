@@ -4,7 +4,7 @@ using UnityEngine;
 
 public static class TextureCalculator
 {
-    public async static Task GenerateBoxMappingUVs(Mesh mesh, CubeFace[] activeFacesPerCube, int[] textureIndex, int atlasSize)
+    public async static Task GenerateBoxMappingUVs(Mesh mesh, List<bool[]> activeFacesPerCube, int[] textureIndex, int atlasSize)
     {
         await Task.Delay(0);
 
@@ -16,9 +16,9 @@ public static class TextureCalculator
         float texelSize = 1.0f / atlasSize; // Assuming a square atlas
 
         int vertexIndex = 0; // Keep track of the vertex index for UV assignment
-        for (int cubeIndex = 0; cubeIndex < activeFacesPerCube.Length; cubeIndex++)
+        for (int cubeIndex = 0; cubeIndex < activeFacesPerCube.Count; cubeIndex++)
         {
-            bool[] activeFaces = activeFacesPerCube[cubeIndex].activeFaces;
+            bool[] activeFaces = activeFacesPerCube[cubeIndex];
 
             // Calculate the offset in the atlas for the current cube
             int textureIdx = textureIndex[cubeIndex]; // Get the texture index for the current cube
