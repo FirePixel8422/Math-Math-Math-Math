@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Unity.VisualScripting;
 using UnityEngine;
 
 [RequireComponent(typeof(MeshRenderer))]
@@ -153,12 +154,14 @@ public class MeshCalculator : MonoBehaviour
         }
         gridPositions = newGridPositions;
 
-        allBlockPositions = blockPositionsSet;
+        allBlockPositions.AddRange(blockPositionsSet);
 
 
 
 
-        halfCubeSize = 0.5f * Instance.cubeSize * Vector3.one;
+
+
+        halfCubeSize = 0.5f * cubeSize * Vector3.one;
 
         faceVerticesOffsets = new Vector3[]{
             new Vector3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z), // 0
@@ -422,6 +425,125 @@ public class MeshCalculator : MonoBehaviour
         stopwatch.Stop();
         print("Generated Mesh After " + stopwatch.ElapsedMilliseconds + "ms, With " + triangles.Count / 3 + " Tris And " + vertices.Count + " Vertices.");
     }
+
+
+
+
+
+
+
+    //public Vector3Int chunkPosition; // Position of the chunk in the chunk grid (chunk coordinates)
+
+    //public List<Vector3Int> GetConnectedEdge(Chunk neighbor)
+    //{
+    //    List<Vector3Int> edgePositions = new List<Vector3Int>();
+
+    //    // Determine which side is connected to the current chunk based on relative position
+    //    if (neighbor.chunkPosition.x < this.chunkPosition.x)
+    //    {
+    //        // Neighbor is on the left (West), return right edge
+    //        edgePositions = GetEdgePositionsRight();
+    //    }
+    //    else if (neighbor.chunkPosition.x > this.chunkPosition.x)
+    //    {
+    //        // Neighbor is on the right (East), return left edge
+    //        edgePositions = GetEdgePositionsLeft();
+    //    }
+    //    else if (neighbor.chunkPosition.z > this.chunkPosition.z)
+    //    {
+    //        // Neighbor is in front (North), return back edge
+    //        edgePositions = GetEdgePositionsBack();
+    //    }
+    //    else if (neighbor.chunkPosition.z < this.chunkPosition.z)
+    //    {
+    //        // Neighbor is behind (South), return front edge
+    //        edgePositions = GetEdgePositionsFront();
+    //    }
+
+    //    return edgePositions;
+    //}
+
+
+    ////
+    ////
+    ////
+    ////
+    ////
+    ////
+    ////
+    ////DELETE FLOAT
+    ////
+    ////
+    //public Vector3Int chunkSize;
+    ////
+    ////
+    ////DELETE FLOAT
+    ////
+    ////
+    ////
+    ////
+    ////
+    ////
+    ////
+    ////
+    ////
+
+
+    //// Get the right edge (x = 15) of this chunk
+    //private List<Vector3Int> GetEdgePositionsRight()
+    //{
+    //    List<Vector3Int> edgePositions = new List<Vector3Int>();
+    //    for (int y = 0; y < chunkSize.y; y++)
+    //    {
+    //        for (int z = 0; z < chunkSize.z; z++)
+    //        {
+    //            edgePositions.Add(new Vector3Int(chunkSize.x - 1, y, z));
+    //        }
+    //    }
+    //    return edgePositions;
+    //}
+
+    //// Get the left edge (x = 0) of this chunk
+    //private List<Vector3Int> GetEdgePositionsLeft()
+    //{
+    //    List<Vector3Int> edgePositions = new List<Vector3Int>();
+    //    for (int y = 0; y < chunkSize.y; y++)
+    //    {
+    //        for (int z = 0; z < chunkSize.z; z++)
+    //        {
+    //            edgePositions.Add(new Vector3Int(0, y, z));
+    //        }
+    //    }
+    //    return edgePositions;
+    //}
+
+    //// Get the back edge (z = 15) of this chunk
+    //private List<Vector3Int> GetEdgePositionsBack()
+    //{
+    //    List<Vector3Int> edgePositions = new List<Vector3Int>();
+    //    for (int y = 0; y < chunkSize.y; y++)
+    //    {
+    //        for (int x = 0; x < chunkSize.x; x++)
+    //        {
+    //            edgePositions.Add(new Vector3Int(x, y, chunkSize.z - 1));
+    //        }
+    //    }
+    //    return edgePositions;
+    //}
+
+    //// Get the front edge (z = 0) of this chunk
+    //private List<Vector3Int> GetEdgePositionsFront()
+    //{
+    //    List<Vector3Int> edgePositions = new List<Vector3Int>();
+    //    for (int y = 0; y < chunkSize.y; y++)
+    //    {
+    //        for (int x = 0; x < chunkSize.x; x++)
+    //        {
+    //            edgePositions.Add(new Vector3Int(x, y, 0));
+    //        }
+    //    }
+    //    return edgePositions;
+    //}
 
 
 
