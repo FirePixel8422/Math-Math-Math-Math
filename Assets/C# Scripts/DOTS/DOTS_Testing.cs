@@ -31,6 +31,18 @@ public class DOTS_Testing : MonoBehaviour
 
         entityManager.CreateEntity(archetype, entityArray);
 
+
+
+        Mesh[] meshes = new Mesh[] { mesh };
+
+        UnityObjectRef<Mesh>[] meshRefs = new UnityObjectRef<Mesh>[meshes.Length];
+        for (int i = 0; i < meshes.Length; i++)
+        {
+            meshRefs[i] = meshes[i];
+        }
+
+
+
         for (int i = 0; i < entityArray.Length; i++)
         {
             Entity entity = entityArray[i];
@@ -39,19 +51,22 @@ public class DOTS_Testing : MonoBehaviour
 
             RenderMeshArray meshArray = new RenderMeshArray
             {
-                Materials = new Material[] {
-                    material
-                },
-                Meshes = new Mesh[]
+                MaterialMeshIndices = new MaterialMeshIndex[]
                 {
-                    mesh
-                }
-
+                    new MaterialMeshIndex
+                    {
+                        MaterialIndex = 0,
+                        MeshIndex = 0
+                    }
+                },
+                MeshReferences = meshRefs
             };
 
-            entityManager.SetSharedComponentManaged(entity, meshArray);
 
-            RenderMeshUtility.AddComponents(entity, entityManager, new RenderMeshDescription(), meshArray, MaterialMeshInfo.FromRenderMeshArrayIndices(0, 0));
+            entityManager.SetSharedComponentManaged(entity, meshArray);
+            entityManager.AddSharedComponentManaged(entity, meshArray);
+
+            //RenderMeshUtility.AddComponents(entity, entityManager, new RenderMeshDescription(), meshArray, MaterialMeshInfo.FromRenderMeshArrayIndices(0, 0));
         }
 
         entityArray.Dispose();
