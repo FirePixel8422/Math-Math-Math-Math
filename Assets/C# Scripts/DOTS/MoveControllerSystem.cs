@@ -13,5 +13,11 @@ public partial class MoveControllerSystem : SystemBase
         {
             transform.Position += new float3(1 * moveSpeedComponent.moveSpeed.x, 0, 1 * moveSpeedComponent.moveSpeed.y) * deltaTime;
         }).Schedule();
+
+        foreach ((RefRW<LocalTransform> transform, RefRO<MoveSpeedComponent> moveSpeedComponent)
+            in SystemAPI.Query<RefRW<LocalTransform>, RefRO<MoveSpeedComponent>>())
+        {
+            transform.ValueRW.Position += new float3(1 * moveSpeedComponent.ValueRO.moveSpeed.x, 0, 1 * moveSpeedComponent.ValueRO.moveSpeed.y) * deltaTime;
+        }
     }
 }

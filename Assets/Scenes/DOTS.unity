@@ -418,11 +418,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1762834401}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 92673142895679a40a128934d34c4eed, type: 3}
+  m_Script: {fileID: 11500000, guid: 0b67955696e16dd4bbd16c8055a9532d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
-  material: {fileID: 2100000, guid: d4e659f845da04c4694f1938b296012a, type: 2}
+  strength: 5000000
+  useBurst: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
