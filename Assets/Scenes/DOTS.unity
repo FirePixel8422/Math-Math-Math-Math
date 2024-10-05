@@ -421,8 +421,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0b67955696e16dd4bbd16c8055a9532d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  strength: 5000000
-  useBurst: 0
+  strength: 10000000
+  jobsPerFrame: 100
+  batchSize: 2048
+  completions: 0
+  elapsed: 0
+  timeCheck: 5
+  paused: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
