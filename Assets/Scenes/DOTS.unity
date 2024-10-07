@@ -416,18 +416,20 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1762834401}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0b67955696e16dd4bbd16c8055a9532d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  strength: 10000000
-  jobsPerFrame: 100
+  debugMathComplexity: 100000
+  jobGroupAmount: 5
+  jobTotalAmount: 5000
   batchSize: 2048
   completions: 0
   elapsed: 0
   timeCheck: 5
   paused: 0
+  testInt: 0
 --- !u!1 &1772714992
 GameObject:
   m_ObjectHideFlags: 0

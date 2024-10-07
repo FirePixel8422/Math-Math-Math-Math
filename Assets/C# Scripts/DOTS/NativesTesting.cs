@@ -1,20 +1,19 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Diagnostics;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
-using UnityEditor.SearchService;
 using UnityEngine;
 using UnityEngine.Jobs;
 
+
+[BurstCompile]
 public class NativesTesting : MonoBehaviour
 {
-    public int strength;
+    public int debugMathComplexity;
 
-    public int jobsPerFrame = 30;
-    private int debugPrevJobsPerFrame;
+    public int jobGroupAmount;
+    public int jobTotalAmount;
+
     public int batchSize;
 
     public int completions;
@@ -27,21 +26,12 @@ public class NativesTesting : MonoBehaviour
 
     private NativeArray<JobHandle> jobHandles;
 
-
-    private void OnValidate()
-    {
-        if (jobsPerFrame != debugPrevJobsPerFrame)
-        {
-            debugPrevJobsPerFrame = jobsPerFrame;
-        }
-    }
+    public int testInt;
+    public NativeArray<NativeArray<int>> testReturnInt;
 
 
-    private void Start()
-    {
-        debugPrevJobsPerFrame = jobsPerFrame;
-    }
 
+    [BurstCompile]
     private void Update()
     {
         if (paused)
@@ -54,68 +44,134 @@ public class NativesTesting : MonoBehaviour
         {
             if (jobHandles[i].IsCompleted)
             {
-                completions += 1;
                 jobsLeft -= 1;
             }
         }
+
+
+        //split load over jobGroupAmount and add 1 for leftover jobs
+        int jobsPerGroup = jobTotalAmount / jobGroupAmount;
+        int lastJobGroupAmount = jobTotalAmount % jobGroupAmount + jobsPerGroup;
+
 
         if (jobsLeft == 0 && (completions > 0 || paused == false))
         {
             if (jobHandles.Length != 0)
             {
                 JobHandle.CompleteAll(jobHandles);
+
+                completions += jobTotalAmount;
             }
 
-            jobHandles.Dispose();
-
-            jobHandles = new NativeArray<JobHandle>(jobsPerFrame, Allocator.Persistent);
-
-
-            for (int i = 0; i < jobsPerFrame; i++)
+            if (testReturnInt.IsCreated)
             {
-                var burstJob = new BurstTestJob { strength = strength };
-                jobHandles[i] = burstJob.Schedule(strength, batchSize); // Schedule the job
+                for (int i = 0; i < testReturnInt.Length; i++)
+                {
+                    for (int i2 = 0; i2 < testReturnInt[i].Length; i2++)
+                    {
+                        testInt += testReturnInt[i][i2];
+                    }
+
+                    testReturnInt[i].Dispose();
+                }
+
+                testReturnInt.Dispose();
+            }
+
+
+            testReturnInt = new NativeArray<NativeArray<int>>(jobGroupAmount, Allocator.Persistent);
+            for (int i = 0; i < testReturnInt.Length; i++)
+            {
+                testReturnInt[i] = new NativeArray<int>((i + 1) == jobGroupAmount ? lastJobGroupAmount : jobsPerGroup, Allocator.Persistent);
+            }
+
+
+            jobHandles.Dispose();
+            jobHandles = new NativeArray<JobHandle>(jobGroupAmount, Allocator.Persistent);
+
+            for (int i = 0; i < jobGroupAmount; i++)
+            {
+                BurstTestJob burstJob = new BurstTestJob
+                {
+                    testReturnInt = testReturnInt[i],
+                    debugMathComplexity = debugMathComplexity,
+                };
+
+                jobHandles[i] = burstJob.Schedule((i + 1) == jobGroupAmount ? lastJobGroupAmount : jobsPerGroup, batchSize); // Schedule the job
             }
         }
 
-        
+
         elapsed += Time.deltaTime;
 
-        if (elapsed >= timeCheck)
+        if (elapsed >= timeCheck && completions > 0)
         {
             paused = true;
 
-            elapsed -= timeCheck;
+            elapsed = 0;
 
-            print($"{completions} tasks completed at a batch size of {batchSize}, with {jobsPerFrame} jobs calls at a time");
+            CallPrint();
 
             completions = 0;
         }
     }
 
-
-    [BurstCompile]
-    public struct BurstTestJob : IJobParallelFor
+    private void CallPrint()
     {
-        public int strength;
+        print($"{completions} tasks completed at a batch size of {batchSize}, calling {jobGroupAmount} job groups with {jobTotalAmount} jobs paralel at a time");
+    }
 
-        public void Execute(int index)
+
+
+    private void OnDestroy()
+    {
+        if (jobHandles.IsCreated)
         {
-            Int32 value1 = 0;
-
-            // First heavy calculation
-            for (int i = 0; i < strength; i++)
-            {
-                value1 += Mathf.RoundToInt(Mathf.Pow(Mathf.Sin(i * 0.1f), 2) * Mathf.Sqrt(i));
-            }
-
-            Int32 value2 = 0;
-
-            // Second heavy calculation that cancels out the first
-            for (int i = 0; i < strength; i++)
-            {
-                value2 += Mathf.RoundToInt(Mathf.Pow(Mathf.Sin(i * 0.1f + Mathf.PI), 2) * Mathf.Sqrt(i));
-            }
+            JobHandle.CompleteAll(jobHandles);
+            jobHandles.Dispose();
         }
+
+        if (testReturnInt.IsCreated)
+        {
+            for (int i = 0; i < testReturnInt.Length; i++)
+            {
+                if (testReturnInt[i].IsCreated)
+                {
+                    testReturnInt[i].Dispose();
+                }
+            }
+
+            testReturnInt.Dispose();
+        }
+    }
+}
+
+[BurstCompile]
+public struct BurstTestJob : IJobParallelFor
+{
+    public NativeArray<int> testReturnInt;
+
+    public int debugMathComplexity;
+
+
+    public void Execute(int index)
+    {
+        int value1 = 0;
+
+        // First heavy calculation
+        for (int i = 0; i < debugMathComplexity; i++)
+        {
+            value1 += Mathf.RoundToInt(Mathf.Pow(Mathf.Sin(i * 0.1f), 2) * Mathf.Sqrt(i));
+        }
+
+        int value2 = 0;
+
+        // Second heavy calculation that cancels out the first
+        for (int i = 0; i < debugMathComplexity; i++)
+        {
+            value2 += Mathf.RoundToInt(Mathf.Pow(-Mathf.Sin(i * 0.1f), 2) * Mathf.Sqrt(i));
+        }
+
+        testReturnInt[index] += Mathf.Clamp(1 + value1 + value2, 0, 1);
     }
 }

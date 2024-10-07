@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Unity.Collections;
 using Unity.VisualScripting;
 using UnityEngine;
 
@@ -89,7 +90,8 @@ public class MeshCalculator : MonoBehaviour
     #region Performance ANTI Local Variables
 
     private int[] textureIndexs;
-    private CubeFace[] activeCubeFaces;
+    private NativeArray<NativeArray<bool>> activeCubeFaces;
+    public NativeArray<NativeArray<bool>> cubeFaces;
 
     private List<Vector3> vertices;
     private List<int> triangles;
@@ -130,7 +132,12 @@ public class MeshCalculator : MonoBehaviour
         List<Vector3> newGridPositions = new List<Vector3>(gridPositions.Count);
 
         textureIndexs = new int[gridPositions.Count];
-        activeCubeFaces = new CubeFace[gridPositions.Count];
+
+        activeCubeFaces = new NativeArray<NativeArray<bool>>(gridPositions.Count, Allocator.Persistent);
+        for (int i = 0; i < 6; i++)
+        {
+            activeCubeFaces[i] = new NativeArray<bool>(6, Allocator.Persistent);
+        }
 
         int atlasSizeSquared = atlasSize * atlasSize;
 
@@ -149,7 +156,7 @@ public class MeshCalculator : MonoBehaviour
                 textureIndexs[i] = UnityEngine.Random.Range(0, atlasSizeSquared + 1);
 
                 //6 faces per cube MAX
-                activeCubeFaces[i].activeFaces = new bool[6];
+                activeCubeFaces[i] = new NativeArray<bool>(6, Allocator.Persistent);
             }
         }
         gridPositions = newGridPositions;
@@ -291,7 +298,7 @@ public class MeshCalculator : MonoBehaviour
             // Add face vertices and triangles if the face is visible
             if (backFaceVisible)
             {
-                activeCubeFaces[cubeIndex].activeFaces[0] = true;
+                activeCubeFaces[cubeIndex][0] = true;
 
                 sortedFaceVertices.AddRange(new Vector3[] { faceVertices[0], faceVertices[1], faceVertices[2], faceVertices[3] });
                 faceTriangles = new int[] {
@@ -307,7 +314,7 @@ public class MeshCalculator : MonoBehaviour
 
             if (frontFaceVisible)
             {
-                activeCubeFaces[cubeIndex].activeFaces[1] = true;
+                activeCubeFaces[cubeIndex][1] = true;
 
                 sortedFaceVertices.AddRange(new Vector3[] { faceVertices[4], faceVertices[5], faceVertices[6], faceVertices[7] });
                 faceTriangles = new int[] {
@@ -323,7 +330,7 @@ public class MeshCalculator : MonoBehaviour
 
             if (rightFaceVisible)
             {
-                activeCubeFaces[cubeIndex].activeFaces[2] = true;
+                activeCubeFaces[cubeIndex][2] = true;
 
                 sortedFaceVertices.AddRange(new Vector3[] { faceVertices[8], faceVertices[9], faceVertices[10], faceVertices[11] });
                 faceTriangles = new int[] {
@@ -339,7 +346,7 @@ public class MeshCalculator : MonoBehaviour
 
             if (leftFaceVisible)
             {
-                activeCubeFaces[cubeIndex].activeFaces[3] = true;
+                activeCubeFaces[cubeIndex][3] = true;
 
                 sortedFaceVertices.AddRange(new Vector3[] { faceVertices[12], faceVertices[13], faceVertices[14], faceVertices[15] });
                 faceTriangles = new int[] {
@@ -355,7 +362,7 @@ public class MeshCalculator : MonoBehaviour
 
             if (topFaceVisible)
             {
-                activeCubeFaces[cubeIndex].activeFaces[4] = true;
+                activeCubeFaces[cubeIndex][4] = true;
 
                 sortedFaceVertices.AddRange(new Vector3[] { faceVertices[16], faceVertices[17], faceVertices[18], faceVertices[19] });
                 faceTriangles = new int[] {
@@ -371,7 +378,7 @@ public class MeshCalculator : MonoBehaviour
 
             if (bottomFaceVisible)
             {
-                activeCubeFaces[cubeIndex].activeFaces[5] = true;
+                activeCubeFaces[cubeIndex][5] = true;
 
                 sortedFaceVertices.AddRange(new Vector3[] { faceVertices[20], faceVertices[21], faceVertices[22], faceVertices[23] });
                 faceTriangles = new int[] {
@@ -575,10 +582,4 @@ public class MeshCalculator : MonoBehaviour
             }
         }
     }
-}
-
-
-public struct CubeFace
-{
-    public bool[] activeFaces;
 }

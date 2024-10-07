@@ -138,7 +138,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &2126039331
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -152,7 +152,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   chunkPrefab: {fileID: 7390307488568928524, guid: 93148cf396aeeff4491ba36d8923f35a, type: 3}
-  amount: 5000
+  amount: 12
 --- !u!4 &2126039332
 Transform:
   m_ObjectHideFlags: 0
