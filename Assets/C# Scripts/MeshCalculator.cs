@@ -3,14 +3,17 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+using Unity.Burst;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
+using Unity.Entities;
+using Unity.Mathematics;
 using Unity.VisualScripting;
 using UnityEngine;
 
 [RequireComponent(typeof(MeshRenderer))]
 [RequireComponent(typeof(MeshFilter))]
+[BurstCompile]
 public class MeshCalculator : MonoBehaviour
 {
     public static MeshCalculator Instance;
@@ -21,8 +24,6 @@ public class MeshCalculator : MonoBehaviour
 
 
 
-
-    public List<Vector3> blockPositions;
 
     public float cubeSize = 1;
 
@@ -43,18 +44,18 @@ public class MeshCalculator : MonoBehaviour
 
 
 
-    private async void Start()
+    private void Start()
     {
         meshRenderer = GetComponent<MeshRenderer>();
         meshFilter = GetComponent<MeshFilter>();
-        stopwatch = new Stopwatch();
-        allBlockPositions = new HashSet<Vector3>();
+        stopwatch = Stopwatch.StartNew();
 
 
+        NativeList<float3> blockPositions = new NativeList<float3>(Allocator.Persistent);
 
         if (randomSpawnAmount > 0)
         {
-            List<Vector3> possiblePositions = new List<Vector3>();
+            List<float3> possiblePositions = new List<float3>();
 
             for (int x = 0; x < spawnBounds.x + 1; x++)
             {
@@ -62,14 +63,13 @@ public class MeshCalculator : MonoBehaviour
                 {
                     for (int z = 0; z < spawnBounds.z + 1; z++)
                     {
-                        possiblePositions.Add(new Vector3((x - spawnBounds.x * 0.5f) * cubeSize, (y - spawnBounds.y * 0.5f) * cubeSize, (z - spawnBounds.z * 0.5f) * cubeSize));
+                        possiblePositions.Add(new float3((x - spawnBounds.x * 0.5f) * cubeSize, (y - spawnBounds.y * 0.5f) * cubeSize, (z - spawnBounds.z * 0.5f) * cubeSize));
                     }
                 }
             }
 
 
             int calculatedAmount = Mathf.Min(randomSpawnAmount, possiblePositions.Count);
-            blockPositions = new List<Vector3>();
 
             for (int i = 0; i < calculatedAmount; i++)
             {
@@ -80,7 +80,9 @@ public class MeshCalculator : MonoBehaviour
             }
         }
 
-        await CreateCombinedMesh(blockPositions);
+        MeshCalculatorJob.CallGenerateMeshJob(blockPositions);
+
+        blockPositions.Dispose();
     }
 
 
@@ -89,79 +91,50 @@ public class MeshCalculator : MonoBehaviour
 
     #region Performance ANTI Local Variables
 
-    private int[] textureIndexs;
-    private NativeArray<NativeArray<bool>> activeCubeFaces;
-    public NativeArray<NativeArray<bool>> cubeFaces;
-
-    private List<Vector3> vertices;
-    private List<int> triangles;
-
-    private List<Vector3> sortedFaceVertices;
-    private List<int> sortedFaceTriangles;
-
-    private int[] faceTriangles;
-
-    private Vector3 halfCubeSize;
-    private Vector3[] faceVerticesOffsets;
-    private Vector3[] gridNeighbourOffsets;
-
+    private float3 halfCubeSize;
 
     private Stopwatch stopwatch;
     #endregion
 
-    //position of every cube in current mesh
-    public HashSet<Vector3> allBlockPositions;
 
-
-    public async Task CreateCombinedMesh(List<Vector3> gridPositions)
+    [BurstCompile]
+    public void CreateCombinedMesh(NativeList<float3> gridPositions)
     {
-        if (gridPositions.Count == 0 || atlasSize == 0)
+        if (gridPositions.Length == 0 || atlasSize == 0)
         {
-            UnityEngine.Debug.LogWarning("Cant Add Mesh, No Positions Added To List Or Atlas Size is < 1");
             return;
         }
 
 
 
-        stopwatch.Reset();
-        stopwatch.Start();
+        NativeList<float3> newGridPositions = new NativeList<float3>(gridPositions.Length, Allocator.Temp);
+
+        NativeArray<int> textureIndexs = new NativeArray<int>(gridPositions.Length, Allocator.Temp);
 
 
-        HashSet<Vector3> blockPositionsSet = new HashSet<Vector3>(allBlockPositions);
-
-        List<Vector3> newGridPositions = new List<Vector3>(gridPositions.Count);
-
-        textureIndexs = new int[gridPositions.Count];
-
-        activeCubeFaces = new NativeArray<NativeArray<bool>>(gridPositions.Count, Allocator.Persistent);
-        for (int i = 0; i < 6; i++)
+        NativeArray<BoolArray> activeCubeFacesTotalList = new NativeArray<BoolArray>(gridPositions.Length, Allocator.Temp);
+        for (int i = 0; i < activeCubeFacesTotalList.Length; i++)
         {
-            activeCubeFaces[i] = new NativeArray<bool>(6, Allocator.Persistent);
+            activeCubeFacesTotalList[i] = new BoolArray()
+            {
+                data = new NativeArray<byte>(6, Allocator.Temp),
+            };
         }
+
+        NativeArray<byte> activeCubeFaces = new NativeArray<byte>(6, Allocator.Temp);
+
+
 
         int atlasSizeSquared = atlasSize * atlasSize;
 
-        for (int i = 0; i < gridPositions.Count; i++)
+        for (int i = 0; i < gridPositions.Length; i++)
         {
-            if (blockPositionsSet.Contains(gridPositions[i]))
-            {
-                continue;
-            }
-            else
-            {
-                blockPositionsSet.Add(gridPositions[i]);
-                newGridPositions.Add(gridPositions[i]);
+            newGridPositions.Add(gridPositions[i]);
 
-                //random Texture from Texture Atlas
-                textureIndexs[i] = UnityEngine.Random.Range(0, atlasSizeSquared + 1);
-
-                //6 faces per cube MAX
-                activeCubeFaces[i] = new NativeArray<bool>(6, Allocator.Persistent);
-            }
+            //random Texture from Texture Atlas
+            textureIndexs[i] = 0;
         }
         gridPositions = newGridPositions;
-
-        allBlockPositions.AddRange(blockPositionsSet);
 
 
 
@@ -170,69 +143,70 @@ public class MeshCalculator : MonoBehaviour
 
         halfCubeSize = 0.5f * cubeSize * Vector3.one;
 
-        faceVerticesOffsets = new Vector3[]{
-            new Vector3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z), // 0
-            new Vector3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z),  // 1
-            new Vector3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z),   // 2
-            new Vector3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z),  // 3
-            new Vector3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z),  // 4
-            new Vector3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z),   // 5
-            new Vector3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z),    // 6
-            new Vector3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z),   // 7
-            new Vector3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z),  // 8
-            new Vector3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z),   // 9
-            new Vector3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z),    // 10
-            new Vector3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z),   // 11
-            new Vector3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z), // 12
-            new Vector3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z),  // 13
-            new Vector3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z),   // 14
-            new Vector3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z),  // 15
-            new Vector3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z),  // 16
-            new Vector3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z),   // 17
-            new Vector3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z),    // 18
-            new Vector3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z),   // 19
-            new Vector3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z), // 20
-            new Vector3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z),  // 21
-            new Vector3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z),   // 22
-            new Vector3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z)   // 23
-                };
+        NativeArray<float3> faceVerticesOffsets = new NativeArray<float3>(24, Allocator.Temp);
 
-        gridNeighbourOffsets = new Vector3[]
-        {
-            new Vector3(0, 0, cubeSize), // Z+
-            new Vector3(0, 0, -cubeSize), // Z-
-            new Vector3(-cubeSize, 0, 0), // X-
-            new Vector3(cubeSize, 0, 0), // X+
-            new Vector3(0, cubeSize, 0), // Y+
-            new Vector3(0, -cubeSize, 0) // Y-
-        };
+        #region faceVerticesOffsets Data Setup
+
+        faceVerticesOffsets[0] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[1] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[2] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[3] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[4] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[5] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[6] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[7] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[8] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[9] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[10] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[11] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[12] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[13] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[14] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[15] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[16] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[17] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[18] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[19] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[20] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[21] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[22] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[23] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+        #endregion
 
 
-        print("Pre-Calculated Values For Cube Including World And Texture Positions After: " + stopwatch.ElapsedMilliseconds + "ms");
 
+        NativeArray<float3> gridNeighbourOffsets = new NativeArray<float3>(6, Allocator.Temp);
+
+        gridNeighbourOffsets[0] = new float3(0, 0, cubeSize);     // Z+
+        gridNeighbourOffsets[1] = new float3(0, 0, -cubeSize);    // Z-
+        gridNeighbourOffsets[2] = new float3(-cubeSize, 0, 0);    // X-
+        gridNeighbourOffsets[3] = new float3(cubeSize, 0, 0);     // X+
+        gridNeighbourOffsets[4] = new float3(0, cubeSize, 0);     // Y+
+        gridNeighbourOffsets[5] = new float3(0, -cubeSize, 0);    // Y-
 
 
 
 
         // 24 vertices per cube
-        vertices = new List<Vector3>(gridPositions.Count * 24);
+        NativeList<float3> vertices = new NativeList<float3>(gridPositions.Length * 24, Allocator.Temp);
+        NativeList<float3> sortedFaceVertices = new NativeList<float3>(24, Allocator.Temp);
 
         // 36 triangles per cube
-        triangles = new List<int>(gridPositions.Count * 36);
+        NativeList<int> triangles = new NativeList<int>(gridPositions.Length * 36, Allocator.Temp);
+        NativeList<int> sortedFaceTriangles = new NativeList<int>(36, Allocator.Temp);
 
 
 
         int vertexOffset = 0;
-        int cubeIndex = 0;
 
-        bool frontFaceVisible, backFaceVisible, leftFaceVisible, rightFaceVisible, topFaceVisible, bottomFaceVisible;
+        int frontFaceVisible, backFaceVisible, leftFaceVisible, rightFaceVisible, topFaceVisible, bottomFaceVisible;
 
-        for (int i = 0; i < gridPositions.Count; i++)
+        for (int cubeIndex = 0; cubeIndex < gridPositions.Length; cubeIndex++)
         {
-            Vector3 gridPosition = gridPositions[i];
+            float3 gridPosition = gridPositions[cubeIndex];
 
             // Define the 6 faces with separate vertices for flat shading
-            Vector3[] faceVertices = new Vector3[]
+            float3[] faceVertices = new float3[]
             {
                 // Back face (Z-)
                 gridPosition + faceVerticesOffsets[0], // 0
@@ -281,158 +255,202 @@ public class MeshCalculator : MonoBehaviour
             Vector3 neighborPositionYMinus = gridPosition + gridNeighbourOffsets[5];
 
             // Check face visibility
-            frontFaceVisible = !allBlockPositions.Contains(neighborPositionZPlus);
-            backFaceVisible = !allBlockPositions.Contains(neighborPositionZMinus);
-            leftFaceVisible = !allBlockPositions.Contains(neighborPositionXMinus);
-            rightFaceVisible = !allBlockPositions.Contains(neighborPositionXPlus);
-            topFaceVisible = !allBlockPositions.Contains(neighborPositionYPlus);
-            bottomFaceVisible = !allBlockPositions.Contains(neighborPositionYMinus);
+            frontFaceVisible = !gridPositions.Contains(neighborPositionZPlus) ? 1 : 0;
+            backFaceVisible = !gridPositions.Contains(neighborPositionZMinus) ? 1 : 0;
+            leftFaceVisible = !gridPositions.Contains(neighborPositionXMinus) ? 1 : 0;
+            rightFaceVisible = !gridPositions.Contains(neighborPositionXPlus) ? 1 : 0;
+            topFaceVisible = !gridPositions.Contains(neighborPositionYPlus) ? 1 : 0;
+            bottomFaceVisible = !gridPositions.Contains(neighborPositionYMinus) ? 1 : 0;
 
 
-            sortedFaceVertices = new List<Vector3>();
-            sortedFaceTriangles = new List<int>();
+            sortedFaceVertices.Clear();
+            sortedFaceTriangles.Clear();
 
             int faceMissedVertOffset = 0;
 
 
-            // Add face vertices and triangles if the face is visible
-            if (backFaceVisible)
-            {
-                activeCubeFaces[cubeIndex][0] = true;
 
-                sortedFaceVertices.AddRange(new Vector3[] { faceVertices[0], faceVertices[1], faceVertices[2], faceVertices[3] });
-                faceTriangles = new int[] {
+            #region Add face vertices and triangles if the face is visible
+
+            if (backFaceVisible == 1)
+            {
+                activeCubeFaces[0] = 1;
+
+                sortedFaceVertices.AddRange(new NativeList<float3>(Allocator.Temp)
+                {
+                    faceVertices[0], faceVertices[1], faceVertices[2], faceVertices[3]
+                }.AsArray());
+
+
+                sortedFaceTriangles.AddRange(new NativeList<int>(Allocator.Temp)
+                {
                     vertexOffset + 2 - faceMissedVertOffset, vertexOffset + 1 - faceMissedVertOffset, vertexOffset + 0 - faceMissedVertOffset,
                     vertexOffset + 3 - faceMissedVertOffset, vertexOffset + 2 - faceMissedVertOffset, vertexOffset + 0 - faceMissedVertOffset
-                };
-                sortedFaceTriangles.AddRange(faceTriangles);
+                }.AsArray());
             }
             else
             {
                 faceMissedVertOffset += 4;
             }
 
-            if (frontFaceVisible)
+            if (frontFaceVisible == 1)
             {
-                activeCubeFaces[cubeIndex][1] = true;
+                activeCubeFaces[1] = 1;
 
-                sortedFaceVertices.AddRange(new Vector3[] { faceVertices[4], faceVertices[5], faceVertices[6], faceVertices[7] });
-                faceTriangles = new int[] {
+                sortedFaceVertices.AddRange(new NativeList<float3>(Allocator.Temp)
+                {
+                    faceVertices[4], faceVertices[5], faceVertices[6], faceVertices[7]
+                }.AsArray());
+
+
+                sortedFaceTriangles.AddRange(new NativeList<int>(Allocator.Temp)
+                {
                     vertexOffset + 5 - faceMissedVertOffset, vertexOffset + 6 - faceMissedVertOffset, vertexOffset + 4 - faceMissedVertOffset,
                     vertexOffset + 6 - faceMissedVertOffset, vertexOffset + 7 - faceMissedVertOffset, vertexOffset + 4 - faceMissedVertOffset
-                };
-                sortedFaceTriangles.AddRange(faceTriangles);
+                }.AsArray());
             }
             else
             {
                 faceMissedVertOffset += 4;
             }
 
-            if (rightFaceVisible)
+            if (rightFaceVisible == 1)
             {
-                activeCubeFaces[cubeIndex][2] = true;
+                activeCubeFaces[2] = 1;
 
-                sortedFaceVertices.AddRange(new Vector3[] { faceVertices[8], faceVertices[9], faceVertices[10], faceVertices[11] });
-                faceTriangles = new int[] {
+                sortedFaceVertices.AddRange(new NativeList<float3>(Allocator.Temp)
+                {
+                    faceVertices[8], faceVertices[9], faceVertices[10], faceVertices[11]
+                }.AsArray());
+
+
+                sortedFaceTriangles.AddRange(new NativeList<int>(Allocator.Temp)
+                {
                     vertexOffset + 10 - faceMissedVertOffset, vertexOffset + 9 - faceMissedVertOffset, vertexOffset + 8 - faceMissedVertOffset,
                     vertexOffset + 11 - faceMissedVertOffset, vertexOffset + 10 - faceMissedVertOffset, vertexOffset + 8 - faceMissedVertOffset
-                };
-                sortedFaceTriangles.AddRange(faceTriangles);
+                }.AsArray());
             }
             else
             {
                 faceMissedVertOffset += 4;
             }
 
-            if (leftFaceVisible)
+            if (leftFaceVisible == 1)
             {
-                activeCubeFaces[cubeIndex][3] = true;
+                activeCubeFaces[3] = 1;
 
-                sortedFaceVertices.AddRange(new Vector3[] { faceVertices[12], faceVertices[13], faceVertices[14], faceVertices[15] });
-                faceTriangles = new int[] {
+                sortedFaceVertices.AddRange(new NativeList<float3>(Allocator.Temp)
+                {
+                    faceVertices[12], faceVertices[13], faceVertices[14], faceVertices[15]
+                }.AsArray());
+
+                sortedFaceTriangles.AddRange(new NativeList<int>(Allocator.Temp)
+                {
                     vertexOffset + 13 - faceMissedVertOffset, vertexOffset + 14 - faceMissedVertOffset, vertexOffset + 12 - faceMissedVertOffset,
                     vertexOffset + 14 - faceMissedVertOffset, vertexOffset + 15 - faceMissedVertOffset, vertexOffset + 12 - faceMissedVertOffset
-                };
-                sortedFaceTriangles.AddRange(faceTriangles);
+                }.AsArray());
             }
             else
             {
                 faceMissedVertOffset += 4;
             }
 
-            if (topFaceVisible)
+            if (topFaceVisible == 1)
             {
-                activeCubeFaces[cubeIndex][4] = true;
+                activeCubeFaces[4] = 1;
 
-                sortedFaceVertices.AddRange(new Vector3[] { faceVertices[16], faceVertices[17], faceVertices[18], faceVertices[19] });
-                faceTriangles = new int[] {
+                sortedFaceVertices.AddRange(new NativeList<float3>(Allocator.Temp)
+                {
+                    faceVertices[16], faceVertices[17], faceVertices[18], faceVertices[19]
+                }.AsArray());
+
+                sortedFaceTriangles.AddRange(new NativeList<int>(Allocator.Temp)
+                {
                     vertexOffset + 16 - faceMissedVertOffset, vertexOffset + 18 - faceMissedVertOffset, vertexOffset + 17 - faceMissedVertOffset,
                     vertexOffset + 16 - faceMissedVertOffset, vertexOffset + 19 - faceMissedVertOffset, vertexOffset + 18 - faceMissedVertOffset
-                };
-                sortedFaceTriangles.AddRange(faceTriangles);
+                }.AsArray());
             }
             else
             {
                 faceMissedVertOffset += 4;
             }
 
-            if (bottomFaceVisible)
+            if (bottomFaceVisible == 1)
             {
-                activeCubeFaces[cubeIndex][5] = true;
+                activeCubeFaces[5] = 1;
 
-                sortedFaceVertices.AddRange(new Vector3[] { faceVertices[20], faceVertices[21], faceVertices[22], faceVertices[23] });
-                faceTriangles = new int[] {
+                sortedFaceVertices.AddRange(new NativeList<float3>(Allocator.Temp)
+                {
+                    faceVertices[20], faceVertices[21], faceVertices[22], faceVertices[23]
+                }.AsArray());
+
+                sortedFaceTriangles.AddRange(new NativeList<int>(Allocator.Temp)
+                {
                     vertexOffset + 20 - faceMissedVertOffset, vertexOffset + 21 - faceMissedVertOffset, vertexOffset + 22 - faceMissedVertOffset,
                     vertexOffset + 20 - faceMissedVertOffset, vertexOffset + 22 - faceMissedVertOffset, vertexOffset + 23 - faceMissedVertOffset
-                };
-                sortedFaceTriangles.AddRange(faceTriangles);
+                }.AsArray());
             }
             else
             {
                 faceMissedVertOffset += 4;
             }
+            #endregion
+
+            activeCubeFacesTotalList[cubeIndex].data.CopyFrom(activeCubeFaces);
 
 
-            vertices.AddRange(sortedFaceVertices);
-            triangles.AddRange(sortedFaceTriangles);
+            vertices.AddRange(sortedFaceVertices.AsArray());
+            triangles.AddRange(sortedFaceTriangles.AsArray());
 
             vertexOffset += 24 - faceMissedVertOffset;
-
-
-            //for loop
-            cubeIndex += 1;
         }
 
-        print("Calculated Vertexes And Tris After: " + stopwatch.ElapsedMilliseconds + "ms");
+
+        ApplyMeshToObject(vertices, triangles, activeCubeFacesTotalList, textureIndexs);
+    }
 
 
-
-
-
-
-
+    private void ApplyMeshToObject(NativeList<float3> vertices, NativeList<int> triangles, NativeArray<BoolArray> activeFacesPerCube, NativeArray<int> textureIndexs)
+    {
         // Create a new mesh and assign the vertices, triangles, and normals
         Mesh mesh = new Mesh();
 
-        if (vertices.Count > 65535)
+        if (vertices.Length > 65535)
         {
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         }
 
-        mesh.vertices = vertices.ToArray();
+
+        NativeList<Vector3> verticesVectors = new NativeList<Vector3>(vertices.Length, Allocator.Temp);
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            verticesVectors[i] = new Vector3(vertices[i].x, vertices[i].y, vertices[i].z);
+        }
+
+        mesh.vertices = verticesVectors.ToArray();
         mesh.triangles = triangles.ToArray();
 
-        await TextureCalculator.GenerateBoxMappingUVs(mesh, activeCubeFaces, textureIndexs, atlasSize);
+
+        NativeArray<Vector2> uvs = new NativeArray<Vector2>(vertices.Length, Allocator.TempJob);
+        TextureCalculator.ScheduleUVGeneration(ref uvs, vertices.Length, activeFacesPerCube, textureIndexs, atlasSize);
+
+        Vector2[] vectorUvs = new Vector2[vertices.Length];
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            vectorUvs[i] = uvs[i];
+        }
+
+        mesh.uv = vectorUvs;
 
         mesh.RecalculateNormals();
-        //mesh.RecalculateBounds();
+        mesh.RecalculateBounds();
 
         meshFilter.mesh = mesh;
 
         stopwatch.Stop();
-        print("Generated Mesh After " + stopwatch.ElapsedMilliseconds + "ms, With " + triangles.Count / 3 + " Tris And " + vertices.Count + " Vertices.");
-    }
 
+        print("Generated Mesh After " + stopwatch.ElapsedMilliseconds + "ms, With " + triangles.Length / 3 + " Tris And " + vertices.Length + " Vertices.");
+    }
 
 
 
@@ -582,4 +600,11 @@ public class MeshCalculator : MonoBehaviour
             }
         }
     }
+}
+
+[BurstCompile]
+[NativeContainer]
+public struct BoolArray
+{
+    public NativeArray<byte> data;
 }

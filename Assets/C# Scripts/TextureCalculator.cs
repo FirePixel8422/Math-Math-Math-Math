@@ -1,97 +1,124 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Unity.Burst;
 using Unity.Collections;
+using Unity.Jobs;
+using Unity.Mathematics;
 using UnityEngine;
 
+
+[BurstCompile]
 public static class TextureCalculator
 {
-    public async static Task GenerateBoxMappingUVs(Mesh mesh, NativeArray<NativeArray<bool>> activeFacesPerCube, int[] textureIndex, int atlasSize)
+    public static void ScheduleUVGeneration(ref NativeArray<Vector2> uvs, int verticeCount, NativeArray<BoolArray> activeFacesPerCube, NativeArray<int> textureIndexs, int atlasSize)
     {
-        await Task.Delay(0);
-
-        // Get the vertices of the mesh
-        Vector3[] vertices = mesh.vertices;
-        Vector2[] uvs = new Vector2[vertices.Length];
-
-        // Calculate the size of each texture in the atlas
-        float texelSize = 1.0f / atlasSize; // Assuming a square atlas
-
-        int vertexIndex = 0; // Keep track of the vertex index for UV assignment
-        for (int cubeIndex = 0; cubeIndex < activeFacesPerCube.Length; cubeIndex++)
+        GenerateBoxMappingUVsJob job = new GenerateBoxMappingUVsJob
         {
-            NativeArray<bool> activeFaces = new NativeArray<bool>(6, Allocator.Persistent);
-            activeFaces.CopyFrom(activeFacesPerCube[cubeIndex]);
+            verticeCount = verticeCount,
+            activeFacesPerCube = activeFacesPerCube,
+            textureIndexs = textureIndexs,
+            atlasSize = atlasSize,
+            uvs = uvs
+        };
 
-            // Calculate the offset in the atlas for the current cube
-            int textureIdx = textureIndex[cubeIndex]; // Get the texture index for the current cube
-            int row = textureIdx / atlasSize; // Which row in the atlas
-            int col = textureIdx % atlasSize; // Which column in the atlas
+        JobHandle handle = job.Schedule();
+        handle.Complete();
+
+        // After completion, you can use the `uvs` array as needed
+
+        // Dispose of the uvs array if it's no longer needed
+        uvs.Dispose();
+    }
 
 
-            float uOffset = col * texelSize; // U offset
-            float vOffset = row * texelSize; // V offset
 
-            // Assign UVs for each active face of the cube
-            for (int faceIndex = 0; faceIndex < 6; faceIndex++)
+    [BurstCompile]
+    public struct GenerateBoxMappingUVsJob : IJob
+    {
+        [ReadOnly] public int verticeCount;
+        [ReadOnly] public NativeArray<BoolArray> activeFacesPerCube;
+        [ReadOnly] public NativeArray<int> textureIndexs;
+        public int atlasSize;
+
+        public NativeArray<Vector2> uvs; // Output UVs
+
+        public void Execute()
+        {
+            // Calculate the size of each texture in the atlas
+            float texelSize = 1.0f / atlasSize; // Assuming a square atlas
+
+            int vertexIndex = 0; // Keep track of the vertex index for UV assignment
+            for (int cubeIndex = 0; cubeIndex < activeFacesPerCube.Length; cubeIndex++)
             {
-                if (activeFaces[faceIndex]) // Only assign UVs if the face is active
+                BoolArray activeFaces = activeFacesPerCube[cubeIndex];
+
+                // Calculate the offset in the atlas for the current cube
+                int textureIdx = textureIndexs[cubeIndex]; // Get the texture index for the current cube
+                int row = textureIdx / atlasSize; // Which row in the atlas
+                int col = textureIdx % atlasSize; // Which column in the atlas
+
+
+                float uOffset = col * texelSize; // U offset
+                float vOffset = row * texelSize; // V offset
+
+                // Assign UVs for each active face of the cube
+                for (int faceIndex = 0; faceIndex < 6; faceIndex++)
                 {
-                    switch (faceIndex)
+                    if (activeFaces.data[faceIndex] == 1) // Only assign UVs if the face is active
                     {
-                        case 0: // back
-                            uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
-                            uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
-                            uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
-                            uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
-                            vertexIndex += 4; // Move to the next face's vertices
-                            break;
+                        switch (faceIndex)
+                        {
+                            case 0: // back
+                                uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
+                                uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
+                                uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
+                                uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
+                                vertexIndex += 4; // Move to the next face's vertices
+                                break;
 
-                        case 1: // front
-                            uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
-                            uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
-                            uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
-                            uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
-                            vertexIndex += 4;
-                            break;
+                            case 1: // front
+                                uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
+                                uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
+                                uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
+                                uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
+                                vertexIndex += 4;
+                                break;
 
-                        case 2: // right
-                            uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
-                            uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
-                            uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
-                            uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
-                            vertexIndex += 4;
-                            break;
+                            case 2: // right
+                                uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
+                                uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
+                                uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
+                                uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
+                                vertexIndex += 4;
+                                break;
 
-                        case 3: // left
-                            uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
-                            uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
-                            uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
-                            uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
-                            vertexIndex += 4;
-                            break;
+                            case 3: // left
+                                uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
+                                uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
+                                uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
+                                uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
+                                vertexIndex += 4;
+                                break;
 
-                        case 4: // top
-                            uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
-                            uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
-                            uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
-                            uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
-                            vertexIndex += 4;
-                            break;
+                            case 4: // top
+                                uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
+                                uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
+                                uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
+                                uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
+                                vertexIndex += 4;
+                                break;
 
-                        case 5: // bottom
-                            uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
-                            uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
-                            uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
-                            uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
-                            vertexIndex += 4;
-                            break;
+                            case 5: // bottom
+                                uvs[vertexIndex + 0] = new Vector2(uOffset, vOffset); // Bottom left
+                                uvs[vertexIndex + 1] = new Vector2(uOffset + texelSize, vOffset); // Bottom right
+                                uvs[vertexIndex + 2] = new Vector2(uOffset + texelSize, vOffset + texelSize); // Top right
+                                uvs[vertexIndex + 3] = new Vector2(uOffset, vOffset + texelSize); // Top left
+                                vertexIndex += 4;
+                                break;
+                        }
                     }
                 }
             }
         }
-
-        // Assign UVs to the mesh
-        mesh.uv = uvs;
     }
-
 }
