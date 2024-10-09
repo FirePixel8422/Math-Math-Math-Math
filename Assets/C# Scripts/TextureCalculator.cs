@@ -26,23 +26,20 @@ public static class TextureCalculator
     }
 
 
-    private const float oneThird = 1 / 3;
-
-
     [BurstCompile]
     public struct GenerateBoxMappingUVsJob : IJob
     {
-        [ReadOnly] public int verticeCount;
+        [NoAlias][ReadOnly] public int verticeCount;
 
         [NativeDisableParallelForRestriction]
-        [ReadOnly] public NativeArray<byte> cubeFacesActiveState;
+        [NoAlias][ReadOnly] public NativeArray<byte> cubeFacesActiveState;
 
-        [ReadOnly] public NativeArray<int> textureIndexs;
+        [NoAlias][ReadOnly] public NativeArray<int> textureIndexs;
 
-        [ReadOnly] public int atlasSize;
+        [NoAlias][ReadOnly] public int atlasSize;
 
         [NativeDisableParallelForRestriction]
-        [WriteOnly] public NativeArray<float2> uvs; // Output UVs
+        [NoAlias][WriteOnly] public NativeArray<float2> uvs; // Output UVs
 
 
 
@@ -52,117 +49,92 @@ public static class TextureCalculator
         {
             // Calculate the size of each texture in the atlas
             float texelSize = 1.0f / atlasSize; // Assuming a square atlas
-            float scaledTexelSize = texelSize / 3; // Scale down the texel size by a factor of 3
+            float scaledTexelSize = texelSize / atlasSize;
+            float halfScaledTexelSize = texelSize / atlasSize * 0.5f; 
 
             int vertexIndex = 0; // Keep track of the vertex index for UV assignment
 
             for (int cubeIndex = 0; cubeIndex < textureIndexs.Length; cubeIndex++)
             {
                 // Calculate the offset in the atlas for the current cube
-                int textureIdx = 2;// textureIndexs[cubeIndex];
+                int textureIdx = 6;// textureIndexs[cubeIndex];
 
                 int row = textureIdx / atlasSize; // Which row in the atlas
                 int col = textureIdx % atlasSize; // Which column in the atlas
 
                 // Calculate the base UV offset for the cube
-                float uOffset = col * texelSize; // U offset
-                float vOffset = row * texelSize; // V offset
+                float uOffset = col * texelSize - halfScaledTexelSize; // U offset
+                float vOffset = row * texelSize - halfScaledTexelSize; // V offset
 
                 // Assign UVs for each active face of the cube
                 for (int faceIndex = 0; faceIndex < 6; faceIndex++)
                 {
                     if (cubeFacesActiveState[cubeIndex * 6 + faceIndex] == 1) // Only assign UVs if the face is active
                     {
-                        // Calculate offsets for the current face
-                        float faceUOffset = uOffset;
-                        float faceVOffset = vOffset;
-
-                        switch (faceIndex)
-                        {
-                            case 0: // back
-                                faceVOffset += scaledTexelSize; // Move up by 1 tile for back
-                                break;
-
-                            case 1: // front
-                                faceVOffset -= scaledTexelSize; // Move down by 1 tile for front
-                                break;
-
-                            case 2: // right
-                                faceUOffset += scaledTexelSize; // Offset to the right
-                                break;
-
-                            case 3: // left
-                                faceUOffset -= scaledTexelSize; // Offset to the left
-                                break;
-
-                            case 4: // top
-                                    // No offset needed for the top face
-                                break;
-
-                            case 5: // bottom
-                                faceVOffset -= scaledTexelSize; // Move down by 1 tile for bottom
-                                faceUOffset -= scaledTexelSize; // Move left by 1 tile for bottom
-                                break;
-                        }
-
                         // Center the UVs and scale down while applying the offset
-                        float newUOffset = faceUOffset + (texelSize / 2) - (scaledTexelSize / 2);
-                        float newVOffset = faceVOffset + (texelSize / 2) - (scaledTexelSize / 2);
+                        float newUOffset = uOffset + (texelSize / 2) - halfScaledTexelSize;
+                        float newVOffset = vOffset + (texelSize / 2) - halfScaledTexelSize;
 
                         switch (faceIndex)
                         {
                             case 0: // back
-                                    // No rotation (0 degrees)
-                                uvs[vertexIndex + 0] = new float2(newUOffset, newVOffset); // Bottom left
-                                uvs[vertexIndex + 1] = new float2(newUOffset + scaledTexelSize, newVOffset); // Bottom right
-                                uvs[vertexIndex + 2] = new float2(newUOffset + scaledTexelSize, newVOffset + scaledTexelSize); // Top right
-                                uvs[vertexIndex + 3] = new float2(newUOffset, newVOffset + scaledTexelSize); // Top left
-                                vertexIndex += 4;
+
+                                uvs[vertexIndex + 0] = new float2(newUOffset, newVOffset);
+                                uvs[vertexIndex + 1] = new float2(newUOffset + scaledTexelSize, newVOffset);
+                                uvs[vertexIndex + 2] = new float2(newUOffset + scaledTexelSize, newVOffset + scaledTexelSize);
+                                uvs[vertexIndex + 3] = new float2(newUOffset, newVOffset + scaledTexelSize);
                                 break;
 
                             case 1: // front
-                                    // No rotation (0 degrees)
-                                uvs[vertexIndex + 0] = new float2(newUOffset, newVOffset); // Bottom left
-                                uvs[vertexIndex + 1] = new float2(newUOffset + scaledTexelSize, newVOffset); // Bottom right
-                                uvs[vertexIndex + 2] = new float2(newUOffset + scaledTexelSize, newVOffset + scaledTexelSize); // Top right
-                                uvs[vertexIndex + 3] = new float2(newUOffset, newVOffset + scaledTexelSize); // Top left
-                                vertexIndex += 4;
+                                newVOffset += scaledTexelSize * 2; // Move up by 2 tile for front
+
+                                uvs[vertexIndex + 0] = new float2(newUOffset, newVOffset);
+                                uvs[vertexIndex + 1] = new float2(newUOffset + scaledTexelSize, newVOffset);
+                                uvs[vertexIndex + 2] = new float2(newUOffset + scaledTexelSize, newVOffset + scaledTexelSize);
+                                uvs[vertexIndex + 3] = new float2(newUOffset, newVOffset + scaledTexelSize);
+
                                 break;
 
                             case 2: // right
-                                    // No rotation (0 degrees)
-                                uvs[vertexIndex + 0] = new float2(newUOffset, newVOffset); // Bottom left
-                                uvs[vertexIndex + 1] = new float2(newUOffset + scaledTexelSize, newVOffset); // Bottom right
-                                uvs[vertexIndex + 2] = new float2(newUOffset + scaledTexelSize, newVOffset + scaledTexelSize); // Top right
-                                uvs[vertexIndex + 3] = new float2(newUOffset, newVOffset + scaledTexelSize); // Top left
-                                vertexIndex += 4;
+                                newUOffset += scaledTexelSize; // Move right by 1 tile for and
+                                newVOffset += scaledTexelSize; // Move up by 1 tile for right
+
+                                uvs[vertexIndex + 0] = new float2(newUOffset, newVOffset);
+                                uvs[vertexIndex + 1] = new float2(newUOffset + scaledTexelSize, newVOffset);
+                                uvs[vertexIndex + 2] = new float2(newUOffset + scaledTexelSize, newVOffset + scaledTexelSize);
+                                uvs[vertexIndex + 3] = new float2(newUOffset, newVOffset + scaledTexelSize);
                                 break;
 
                             case 3: // left
-                                    // No rotation (0 degrees)
-                                uvs[vertexIndex + 0] = new float2(newUOffset, newVOffset); // Bottom left
-                                uvs[vertexIndex + 1] = new float2(newUOffset + scaledTexelSize, newVOffset); // Bottom right
-                                uvs[vertexIndex + 2] = new float2(newUOffset + scaledTexelSize, newVOffset + scaledTexelSize); // Top right
-                                uvs[vertexIndex + 3] = new float2(newUOffset, newVOffset + scaledTexelSize); // Top left
-                                vertexIndex += 4;
+                                newUOffset -= scaledTexelSize; // Move left by 1 tile for and
+                                newVOffset += scaledTexelSize; // Move up by 1 tile for right
+
+                                uvs[vertexIndex + 0] = new float2(newUOffset, newVOffset);
+                                uvs[vertexIndex + 1] = new float2(newUOffset + scaledTexelSize, newVOffset);
+                                uvs[vertexIndex + 2] = new float2(newUOffset + scaledTexelSize, newVOffset + scaledTexelSize);
+                                uvs[vertexIndex + 3] = new float2(newUOffset, newVOffset + scaledTexelSize);
                                 break;
 
                             case 4: // top
+                                newVOffset += scaledTexelSize; // Move up by 1 tile for top
+
                                 uvs[vertexIndex + 0] = new float2(newUOffset, newVOffset);
                                 uvs[vertexIndex + 1] = new float2(newUOffset + scaledTexelSize, newVOffset);
                                 uvs[vertexIndex + 2] = new float2(newUOffset + scaledTexelSize, newVOffset + scaledTexelSize);
                                 uvs[vertexIndex + 3] = new float2(newUOffset, newVOffset + scaledTexelSize);
-                                vertexIndex += 4;
                                 break;
 
                             case 5: // bottom
+                                newVOffset -= scaledTexelSize; // Move down by 1 tile for bottom
+
                                 uvs[vertexIndex + 0] = new float2(newUOffset, newVOffset);
                                 uvs[vertexIndex + 1] = new float2(newUOffset + scaledTexelSize, newVOffset);
                                 uvs[vertexIndex + 2] = new float2(newUOffset + scaledTexelSize, newVOffset + scaledTexelSize);
                                 uvs[vertexIndex + 3] = new float2(newUOffset, newVOffset + scaledTexelSize);
-                                vertexIndex += 4;
                                 break;
                         }
+
+                        vertexIndex += 4;
                     }
                 }
             }
@@ -193,7 +165,6 @@ public static class TextureCalculator
         {
             // Calculate the size of each texture in the atlas
             float texelSize = 1.0f / atlasSize; // Assuming a square atlas
-            float thirdOfTexelSize = oneThird * atlasSize;
 
             int vertexIndex = cubeIndex * 24; // Keep track of the vertex index for UV assignment
 

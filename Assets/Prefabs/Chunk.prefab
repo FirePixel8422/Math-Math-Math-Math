@@ -120,9 +120,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cubeSize: 1
-  meshRenderer: {fileID: 0}
-  meshFilter: {fileID: 0}
-  meshCollider: {fileID: 0}
+  meshRenderer: {fileID: 3571814737543049926}
+  meshFilter: {fileID: 5034534840836416473}
+  meshCollider: {fileID: 4923432470865119043}
   autoUpdate: 0
   atlasSize: 3
   chunkSize: 16
@@ -133,4 +133,8 @@ MonoBehaviour:
   persistence: 1
   lacunarity: 0.5
   chunkGridPos: {x: 0, y: 0}
+  debugVerts: []
+  debugTris: 
+  drawMeshVerticesGizmos: 0
+  drawMeshEdgesGizmos: 0
   chunkPosition: {x: 0, y: 0, z: 0}

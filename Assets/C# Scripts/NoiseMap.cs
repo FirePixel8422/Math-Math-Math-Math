@@ -41,8 +41,7 @@ public static class NoiseMap
         return noiseMap;
     }
     // Calculates the height for a specific (x, z) position using Perlin noise
-    private static float CalculatePerlinNoiseHeight(int x, int z, int resolution, int chunkSize, float scale, int seed, int
-maxChunkHeight)
+    private static float CalculatePerlinNoiseHeight(int x, int z, int resolution, int chunkSize, float scale, int seed, int maxChunkHeight)
     {
         float noiseHeight = 0;
         float amplitude = 1;

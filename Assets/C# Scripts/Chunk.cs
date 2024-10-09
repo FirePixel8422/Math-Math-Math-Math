@@ -24,8 +24,6 @@ public class Chunk : MonoBehaviour
     public MeshFilter meshFilter;
     public MeshCollider meshCollider;
 
-    public bool autoUpdate;
-
     public int atlasSize;
 
     public int chunkSize, maxChunkHeight;
@@ -37,22 +35,11 @@ public class Chunk : MonoBehaviour
     public float persistence;
     public float lacunarity;
 
-    public Vector2Int chunkGridPos;
-
 
 
     private void Start()
     {
-        stopwatch = Stopwatch.StartNew();
-
         noiseMap = NoiseMap.GenerateNoiseMap(chunkSize, chunkSize, seed, scale, octaves, persistence, lacunarity, new(transform.position.x, transform.position.z));
-
-        print("NoiseMap Took: " + stopwatch.ElapsedMilliseconds + "ms");
-
-        meshRenderer = GetComponent<MeshRenderer>();
-        meshFilter = GetComponent<MeshFilter>();
-        meshFilter.mesh = new Mesh();
-        meshCollider = GetComponent<MeshCollider>();
     }
 
 
@@ -95,9 +82,7 @@ public class Chunk : MonoBehaviour
     [BurstCompile]
     public void GenerateBlockPos()
     {
-        stopwatch.Restart();
-
-        NativeList<int3> blockpositions = new NativeList<int3>(chunkSize * chunkSize * maxChunkHeight, Allocator.TempJob);
+        NativeList<int3> blockPositions = new NativeList<int3>(chunkSize * chunkSize * maxChunkHeight, Allocator.TempJob);
 
         for (int x = 0; x < chunkSize; x++)
         {
@@ -110,18 +95,14 @@ public class Chunk : MonoBehaviour
                 // Add block positions up to the max height
                 for (int y = 0; y < maxY; y++)
                 {
-                    blockpositions.Add(new int3(x, y, z));
+                    blockPositions.Add(new int3(x, y, z));
                 }
             }
         }
 
-        print("Configuring Chunk Data Took: " + stopwatch.ElapsedMilliseconds + "ms");
+        MeshCalculatorJob.CallGenerateMeshJob(blockPositions.AsArray(), cubeSize, atlasSize, meshFilter.mesh, GetComponent<MeshCollider>());
 
-        MeshCalculatorJob.CallGenerateMeshJob(blockpositions.AsArray(), cubeSize, atlasSize, meshFilter.mesh, GetComponent<MeshCollider>());
-
-        blockpositions.Dispose();
-
-        stopwatch.Stop();
+        blockPositions.Dispose();
     }
 
     private int CalculatePerlinNoiseHeight(int x, int z, Vector2Int resolution, float scale, int seed)
@@ -149,12 +130,6 @@ public class Chunk : MonoBehaviour
         return Mathf.FloorToInt(noiseHeight * maxChunkHeight);
     }
 
-
-
-
-
-
-    private Stopwatch stopwatch;
 
 
 

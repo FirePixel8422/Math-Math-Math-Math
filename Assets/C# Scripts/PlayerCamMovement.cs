@@ -46,6 +46,6 @@ public class PlayerCamMovement : MonoBehaviour
     public void RotateAndMoveTowardsTarget(Transform target)
     {
         Quaternion targetRotation = target.rotation;
-        cameraHolder.rotation = Quaternion.Lerp(cameraHolder.rotation, targetRotation, Time.deltaTime * rotationSpeed);
+        cameraHolder.rotation = Quaternion.Lerp(cameraHolder.rotation, targetRotation, rotationSpeed);
     }
 }
