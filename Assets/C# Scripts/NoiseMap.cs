@@ -1,5 +1,7 @@
 using Unity.Burst;
 using UnityEngine;
+
+[BurstCompile]
 public static class NoiseMap
 {
     public static float[,] heightMap;
@@ -11,6 +13,9 @@ public static class NoiseMap
     private static int maxChunkHeight;
     private static int seed;
     private static Vector2 offset;
+
+
+
     // Generates the height map based on the given parameters
     public static float[,] GenerateNoiseMap(int resolution, int seed, int chunkSize, float scale, int octaves, float lacunarity, float persistence, Vector2 offset)
     {

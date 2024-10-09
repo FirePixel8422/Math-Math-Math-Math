@@ -59,7 +59,7 @@ public static class TextureCalculator
             for (int cubeIndex = 0; cubeIndex < textureIndexs.Length; cubeIndex++)
             {
                 // Calculate the offset in the atlas for the current cube
-                int textureIdx = textureIndexs[cubeIndex];
+                int textureIdx = 6;// textureIndexs[cubeIndex];
 
                 int row = textureIdx / atlasSize; // Which row in the atlas
                 int col = textureIdx % atlasSize; // Which column in the atlas

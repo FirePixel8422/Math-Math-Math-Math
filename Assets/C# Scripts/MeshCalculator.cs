@@ -108,7 +108,7 @@ public class MeshCalculator : MonoBehaviour
         DEBUG_CallTimer();
 #endif
 
-        MeshCalculatorJob.CallGenerateMeshJob(blockPositions, cubeSize);
+        //MeshCalculatorJob.CallGenerateMeshJob(blockPositions, cubeSize);
 
         blockPositions.Dispose();
     }
@@ -169,8 +169,8 @@ public class MeshCalculator : MonoBehaviour
         }
 
 
-        debugVerts = verticesVectors;
-        debugTris = trianglesVectors;
+        //debugVerts = verticesVectors;
+        //debugTris = trianglesVectors;
 
         mesh.vertices = verticesVectors;
         mesh.triangles = trianglesVectors;

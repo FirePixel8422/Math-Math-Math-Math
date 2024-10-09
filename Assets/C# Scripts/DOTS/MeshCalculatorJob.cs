@@ -1,13 +1,9 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics;
 using Unity.Burst;
 using Unity.Collections;
-using Unity.Entities.UniversalDelegates;
 using Unity.Jobs;
 using Unity.Mathematics;
-using UnityEditor.SearchService;
 using UnityEngine;
 
 
@@ -18,16 +14,15 @@ public class MeshCalculatorJob
     public static Stopwatch sw2;
 
 
-    public static void CallGenerateMeshJob(NativeArray<float3> blockPositions, float cubeSize)
+    public static void CallGenerateMeshJob(NativeList<float3> blockPositions, float cubeSize, int atlasSize, Mesh mesh)
     {
         sw = Stopwatch.StartNew();
+
+        JobHandle jobHandle;
 
         #region Main Data NativeContainers
 
         int blockPositionsLength = blockPositions.Length;
-
-        NativeHashSet<float3> blockPositionsSet = new NativeHashSet<float3>(blockPositionsLength, Allocator.TempJob);
-
 
         NativeArray<float3> vertices = new NativeArray<float3>(blockPositionsLength * 24, Allocator.TempJob);
 
@@ -45,32 +40,68 @@ public class MeshCalculatorJob
 
         NativeArray<float3> faceVertices = new NativeArray<float3>(24, Allocator.TempJob);
 
+        UnityEngine.Debug.Log("Setup For CalculateMeshJobs Took: " + sw.ElapsedMilliseconds + "ms");
+        sw.Restart();
+
         #endregion
 
 
 
 
-        #region SetupData Jobs
+        #region SetupData For The Jobs
 
-        SetupDataJob setupDataJob = new SetupDataJob
+
+        int triangleCount = triangles.Length;
+
+        for (int i = 0; i < triangleCount; i++)
         {
-            blockPositions = blockPositions,
-            blockPositionsSet = blockPositionsSet,
+            triangles[i] = -1;
+        }
 
-            vertices = vertices,
-            triangles = triangles,
+        #region faceVerticesOffsets Data Setup
 
-            faceVerticesOffsets = faceVerticesOffsets,
-            
-            faceVertices = faceVertices,
+        float3 halfCubeSize = 0.5f * cubeSize * Vector3.one;
 
-            cubeSize = cubeSize,
-        };
+        faceVerticesOffsets[0] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[1] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[2] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[3] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[4] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[5] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[6] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[7] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[8] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[9] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[10] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[11] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[12] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[13] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[14] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[15] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[16] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[17] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[18] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[19] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[20] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[21] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+        faceVerticesOffsets[22] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+        faceVerticesOffsets[23] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
 
-        JobHandle jobHandle = setupDataJob.Schedule();
-        jobHandle.Complete();
+        #endregion
 
-        UnityEngine.Debug.Log("Setup For CalculateMeshJobs Took: " + sw.ElapsedMilliseconds + "ms");
+
+        for (int i = 0; i < 6; i++) // 6 faces
+        {
+            // Calculate the index offsets for each face's vertices
+            int baseIndex = i * 4; // 4 vertices per face
+            faceVertices[baseIndex + 0] = faceVerticesOffsets[baseIndex + 0];
+            faceVertices[baseIndex + 1] = faceVerticesOffsets[baseIndex + 1];
+            faceVertices[baseIndex + 2] = faceVerticesOffsets[baseIndex + 2];
+            faceVertices[baseIndex + 3] = faceVerticesOffsets[baseIndex + 3];
+        }
+
+
+        UnityEngine.Debug.Log("Pre-Calculating MeshJobs Data Took: " + sw.ElapsedMilliseconds + "ms");
         sw.Restart();
 
         #endregion
@@ -89,8 +120,7 @@ public class MeshCalculatorJob
 
         GenerateMeshCubesJobParallel generateMeshCubesJob = new GenerateMeshCubesJobParallel
         {
-            blockPositions = blockPositions,
-            blockPositionsSet = blockPositionsSet,
+            blockPositions = blockPositions.AsArray(),
 
             vertices = vertices,
             faceVertices = faceVertices,
@@ -102,8 +132,12 @@ public class MeshCalculatorJob
             cubeSize = cubeSize,
         };
 
-        jobHandle = generateMeshCubesJob.Schedule(blockPositionsLength, 2048);
+        sw2 = new Stopwatch();
+
+        jobHandle = generateMeshCubesJob.Schedule(blockPositionsLength, 4096);
         jobHandle.Complete();
+
+        UnityEngine.Debug.Log("Contains Took " + sw2.ElapsedMilliseconds + "ms");
 
 
         UnityEngine.Debug.Log("CalculateMeshJob Took: " + sw.ElapsedMilliseconds + "ms");
@@ -113,8 +147,6 @@ public class MeshCalculatorJob
 
 
         #region Dispose All NativeContainers That Are Done Being Used
-
-        blockPositionsSet.Dispose();
 
         faceVertices.Dispose();
 
@@ -137,11 +169,6 @@ public class MeshCalculatorJob
             filteredTriangles = filteredTriangles,
         };
 
-        for (int i = 0; i < triangles.Length; i++)
-        {
-            UnityEngine.Debug.Log(triangles[i]);
-        }
-
         jobHandle = job.Schedule();
         jobHandle.Complete();
 
@@ -162,7 +189,7 @@ public class MeshCalculatorJob
 
 
 
-        MeshCalculator.Instance.ApplyMeshToObject(filteredVertices, filteredTriangles, cubeFacesActiveState, textureIndexs);
+        ApplyMeshToObject(filteredVertices, filteredTriangles, cubeFacesActiveState, textureIndexs, atlasSize, mesh);
 
 
         #region Dispose All Remaining Native Containers That Are Done Being Used After ApplyMeshToObject
@@ -178,6 +205,63 @@ public class MeshCalculatorJob
         #endregion
 
     }
+
+
+    public static void ApplyMeshToObject(NativeList<float3> vertices, NativeList<int> triangles, NativeArray<byte> cubeFacesActiveState, NativeArray<int> textureIndexs, int atlasSize, Mesh mesh)
+    {
+        sw.Restart();
+
+        NativeArray<float2> uvs = new NativeArray<float2>(vertices.Length, Allocator.Persistent);
+        TextureCalculator.ScheduleUVGeneration(uvs, vertices.Length, cubeFacesActiveState, textureIndexs, atlasSize);
+
+        Vector2[] vectorUvs = new Vector2[vertices.Length];
+        for (int i = 0; i < vectorUvs.Length; i++)
+        {
+            vectorUvs[i] = new Vector2(uvs[i].x, uvs[i].y);
+        }
+
+        UnityEngine.Debug.Log("Generating Texture UvMap Finished In " + sw.ElapsedMilliseconds + "ms");
+        sw.Restart();
+
+
+        if (vertices.Length > 65535)
+        {
+            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        }
+
+
+
+        Vector3[] verticesVectors = new Vector3[vertices.Length];
+
+        for (int i = 0; i < verticesVectors.Length; i++)
+        {
+            verticesVectors[i] = new Vector3(vertices[i].x, vertices[i].y, vertices[i].z);
+        }
+
+
+        int[] trianglesVectors = new int[triangles.Length];
+
+        for (int i = 0; i < trianglesVectors.Length; i++)
+        {
+            trianglesVectors[i] = triangles[i];
+        }
+
+
+
+        mesh.vertices = verticesVectors;
+        mesh.triangles = trianglesVectors;
+
+        mesh.uv = vectorUvs;
+
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        uvs.Dispose();
+
+        sw.Stop();
+
+        UnityEngine.Debug.Log("Applying Mesh Finished In " + sw.ElapsedMilliseconds + "ms, With " + triangles.Length / 3 + " Tris And " + vertices.Length + " Vertices.");
+    }
 }
 
 
@@ -187,30 +271,19 @@ public class MeshCalculatorJob
 [BurstCompile]
 public struct SetupDataJob : IJob
 {
-    [ReadOnly] public NativeArray<float3> blockPositions;
-    [WriteOnly] public NativeHashSet<float3> blockPositionsSet;
+    [NoAlias][WriteOnly] public NativeArray<float3> vertices;
+    [NoAlias][WriteOnly] public NativeArray<int> triangles;
 
-    [WriteOnly] public NativeArray<float3> vertices;
-    [WriteOnly] public NativeArray<int> triangles;
+    [NoAlias] public NativeArray<float3> faceVerticesOffsets;
 
-    public NativeArray<float3> faceVerticesOffsets;
+    [NoAlias][WriteOnly] public NativeArray<float3> faceVertices;
 
-    [WriteOnly] public NativeArray<float3> faceVertices;
-
-    [ReadOnly] public float cubeSize;
+    [NoAlias][ReadOnly] public float cubeSize;
 
 
     [BurstCompile]
     public void Execute()
     {
-        int blockPositionsLength = blockPositions.Length;
-
-        for (int i = 0; i < blockPositionsLength; i++)
-        {
-            blockPositionsSet.Add(blockPositions[i]);
-        }
-
-
         int triangleCount = triangles.Length;
 
         for (int i = 0; i < triangleCount; i++)
@@ -268,22 +341,31 @@ public struct SetupDataJob : IJob
 [BurstCompile]
 public struct GenerateMeshCubesJobParallel : IJobParallelFor
 {
-    [ReadOnly] public NativeArray<float3> blockPositions;
-
-    [ReadOnly] public NativeHashSet<float3> blockPositionsSet;
-
-    [NativeDisableParallelForRestriction]
-    [WriteOnly] public NativeArray<float3> vertices;
-
-    [ReadOnly] public NativeArray<float3> faceVertices;
+    [NoAlias][ReadOnly] public NativeArray<float3> blockPositions;
+    [NoAlias][ReadOnly] public NativeHashMap<float3, bool> blockPositionsMap;
 
     [NativeDisableParallelForRestriction]
-    [WriteOnly] public NativeArray<int> triangles;
+    [NoAlias][WriteOnly] public NativeArray<float3> vertices;
+
+    [NoAlias][ReadOnly] public NativeArray<float3> faceVertices;
 
     [NativeDisableParallelForRestriction]
-    [WriteOnly] public NativeArray<byte> cubeFacesActiveState;
+    [NoAlias][WriteOnly] public NativeArray<int> triangles;
 
-    [ReadOnly] public float cubeSize;
+    [NativeDisableParallelForRestriction]
+    [NoAlias][WriteOnly] public NativeArray<byte> cubeFacesActiveState;
+
+    [NoAlias][ReadOnly] public float cubeSize;
+
+    readonly static float3[] neighborOffsets = new float3[]
+    {
+        new float3(0, 0, 1),     // Z+
+        new float3(0, 0, -1),    // Z-
+        new float3(-1, 0, 0),    // X-
+        new float3(1, 0, 0),     // X+
+        new float3(0, 1, 0),     // Y+
+        new float3(0, -1, 0)     // Y-
+    };
 
 
 
@@ -295,22 +377,28 @@ public struct GenerateMeshCubesJobParallel : IJobParallelFor
         float3 cubePosition = blockPositions[cubeIndex];
 
 
-        float3 neighborPositionZPlus = cubePosition + new float3(0, 0, cubeSize);      // Z+
-        float3 neighborPositionZMinus = cubePosition + new float3(0, 0, -cubeSize);    // Z-
-        float3 neighborPositionXMinus = cubePosition + new float3(-cubeSize, 0, 0);    // X-
-        float3 neighborPositionXPlus = cubePosition + new float3(cubeSize, 0, 0);      // X+
-        float3 neighborPositionYPlus = cubePosition + new float3(0, cubeSize, 0);      // Y+
-        float3 neighborPositionYMinus = cubePosition + new float3(0, -cubeSize, 0);    // Y-
+        float3 neighborPositionZPlus = cubePosition + neighborOffsets[0] * cubeSize;      // Z+
+        float3 neighborPositionZMinus = cubePosition + neighborOffsets[1] * cubeSize;    // Z-
+        float3 neighborPositionXMinus = cubePosition + neighborOffsets[2] * cubeSize;    // X-
+        float3 neighborPositionXPlus = cubePosition + neighborOffsets[3] * cubeSize;      // X+
+        float3 neighborPositionYPlus = cubePosition + neighborOffsets[4] * cubeSize;      // Y+
+        float3 neighborPositionYMinus = cubePosition + neighborOffsets[5] * cubeSize;    // Y-
+
+
+        MeshCalculatorJob.sw2.Start();
 
         // Check face visibility
-        frontFaceVisible = !blockPositionsSet.Contains(neighborPositionZPlus) ? 1 : 0;
-        backFaceVisible = !blockPositionsSet.Contains(neighborPositionZMinus) ? 1 : 0;
-        leftFaceVisible = !blockPositionsSet.Contains(neighborPositionXMinus) ? 1 : 0;
-        rightFaceVisible = !blockPositionsSet.Contains(neighborPositionXPlus) ? 1 : 0;
-        topFaceVisible = !blockPositionsSet.Contains(neighborPositionYPlus) ? 1 : 0;
-        bottomFaceVisible = !blockPositionsSet.Contains(neighborPositionYMinus) ? 1 : 0;
+        frontFaceVisible = !blockPositions.Contains(neighborPositionZPlus) ? 1 : 0;
+        backFaceVisible = !blockPositions.Contains(neighborPositionZMinus) ? 1 : 0;
+        leftFaceVisible = !blockPositions.Contains(neighborPositionXMinus) ? 1 : 0;
+        rightFaceVisible = !blockPositions.Contains(neighborPositionXPlus) ? 1 : 0;
+        topFaceVisible = !blockPositions.Contains(neighborPositionYPlus) ? 1 : 0;
+        bottomFaceVisible = !blockPositions.Contains(neighborPositionYMinus) ? 1 : 0;
+
+        MeshCalculatorJob.sw2.Stop();
 
 
+        int cCubeActiveStateIndex = cubeIndex * 6;
         int cVerticeIndex = cubeIndex * 24;
         int cTriangleIndex = cubeIndex * 36;
 
@@ -319,7 +407,7 @@ public struct GenerateMeshCubesJobParallel : IJobParallelFor
 
         if (backFaceVisible == 1)
         {
-            cubeFacesActiveState[cubeIndex * 6 + 0] = 1;
+            cubeFacesActiveState[cCubeActiveStateIndex + 0] = 1;
 
             vertices[cVerticeIndex + 0] = faceVertices[0] + cubePosition;
             vertices[cVerticeIndex + 1] = faceVertices[1] + cubePosition;
@@ -328,7 +416,7 @@ public struct GenerateMeshCubesJobParallel : IJobParallelFor
 
             triangles[cTriangleIndex + 0] = cVerticeIndex + 2;
             triangles[cTriangleIndex + 1] = cVerticeIndex + 1;
-            triangles[cTriangleIndex + 2] = cVerticeIndex + 0; 
+            triangles[cTriangleIndex + 2] = cVerticeIndex + 0;
             triangles[cTriangleIndex + 3] = cVerticeIndex + 3;
             triangles[cTriangleIndex + 4] = cVerticeIndex + 2;
             triangles[cTriangleIndex + 5] = cVerticeIndex + 0;
@@ -336,7 +424,7 @@ public struct GenerateMeshCubesJobParallel : IJobParallelFor
 
         if (frontFaceVisible == 1)
         {
-            cubeFacesActiveState[cubeIndex * 6 + 1] = 1;
+            cubeFacesActiveState[cCubeActiveStateIndex + 1] = 1;
 
             vertices[cVerticeIndex + 4] = faceVertices[4] + cubePosition;
             vertices[cVerticeIndex + 5] = faceVertices[5] + cubePosition;
@@ -353,7 +441,7 @@ public struct GenerateMeshCubesJobParallel : IJobParallelFor
 
         if (rightFaceVisible == 1)
         {
-            cubeFacesActiveState[cubeIndex * 6 + 2] = 1;
+            cubeFacesActiveState[cCubeActiveStateIndex + 2] = 1;
 
             vertices[cVerticeIndex + 8] = faceVertices[8] + cubePosition;
             vertices[cVerticeIndex + 9] = faceVertices[9] + cubePosition;
@@ -370,7 +458,7 @@ public struct GenerateMeshCubesJobParallel : IJobParallelFor
 
         if (leftFaceVisible == 1)
         {
-            cubeFacesActiveState[cubeIndex * 6 + 3] = 1;
+            cubeFacesActiveState[cCubeActiveStateIndex + 3] = 1;
 
             vertices[cVerticeIndex + 12] = faceVertices[12] + cubePosition;
             vertices[cVerticeIndex + 13] = faceVertices[13] + cubePosition;
@@ -387,7 +475,7 @@ public struct GenerateMeshCubesJobParallel : IJobParallelFor
 
         if (topFaceVisible == 1)
         {
-            cubeFacesActiveState[cubeIndex * 6 + 4] = 1;
+            cubeFacesActiveState[cCubeActiveStateIndex + 4] = 1;
 
             vertices[cVerticeIndex + 16] = faceVertices[16] + cubePosition;
             vertices[cVerticeIndex + 17] = faceVertices[17] + cubePosition;
@@ -404,7 +492,7 @@ public struct GenerateMeshCubesJobParallel : IJobParallelFor
 
         if (bottomFaceVisible == 1)
         {
-            cubeFacesActiveState[cubeIndex * 6 + 5] = 1;
+            cubeFacesActiveState[cCubeActiveStateIndex + 5] = 1;
 
             vertices[cVerticeIndex + 20] = faceVertices[20] + cubePosition;
             vertices[cVerticeIndex + 21] = faceVertices[21] + cubePosition;
@@ -428,11 +516,11 @@ public struct GenerateMeshCubesJobParallel : IJobParallelFor
 [BurstCompile]
 public struct FinalizeMeshMathJob : IJob
 {
-    [ReadOnly] public NativeArray<float3> vertices;
-    [ReadOnly] public NativeArray<int> triangles;
+    [NoAlias][ReadOnly] public NativeArray<float3> vertices;
+    [NoAlias][ReadOnly] public NativeArray<int> triangles;
 
-    [WriteOnly] public NativeList<float3> filteredVertices;
-    [WriteOnly] public NativeList<int> filteredTriangles;
+    [NoAlias][WriteOnly] public NativeList<float3> filteredVertices;
+    [NoAlias][WriteOnly] public NativeList<int> filteredTriangles;
 
     public void Execute()
     {
