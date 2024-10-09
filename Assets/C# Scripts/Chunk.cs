@@ -18,7 +18,7 @@ using Unity.Mathematics;
 [BurstCompile]
 public class Chunk : MonoBehaviour
 {
-    public float cubeSize;
+    public int cubeSize;
 
     public MeshRenderer meshRenderer;
     public MeshFilter meshFilter;
@@ -40,31 +40,64 @@ public class Chunk : MonoBehaviour
     public Vector2Int chunkGridPos;
 
 
-    private int adjustedX;
-    private int adjustedZ;
-    private int perlinValue;
-    private int maxY;
-
 
     private void Start()
     {
+        stopwatch = Stopwatch.StartNew();
+
         noiseMap = NoiseMap.GenerateNoiseMap(chunkSize, chunkSize, seed, scale, octaves, persistence, lacunarity, new(transform.position.x, transform.position.z));
+
+        print("NoiseMap Took: " + stopwatch.ElapsedMilliseconds + "ms");
 
         meshRenderer = GetComponent<MeshRenderer>();
         meshFilter = GetComponent<MeshFilter>();
+        meshFilter.mesh = new Mesh();
         meshCollider = GetComponent<MeshCollider>();
-        stopwatch = new Stopwatch();
-        var chunkpos = new Vector3Int((int)transform.position.x, (int)transform.position.y, (int)transform.position.z);
-        GenerateBlockPos(chunkpos);
     }
 
 
-    [BurstCompile]
-    private void GenerateBlockPos(Vector3Int chunkPosition)
-    {
-        stopwatch.Start();
+    public Vector3[] debugVerts;
+    public int[] debugTris;
 
-        NativeList<float3> blockpositions = new NativeList<float3>(chunkSize * chunkSize * maxChunkHeight, Allocator.TempJob);
+
+
+
+    public bool drawMeshVerticesGizmos;
+    public bool drawMeshEdgesGizmos;
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.DrawWireCube(transform.position + new Vector3(chunkSize * 0.5f - 0.5f, chunkSize * 0.5f - 0.5f, chunkSize * 0.5f - 0.5f), Vector3.one * chunkSize);
+
+
+        Gizmos.color = Color.black;
+        if (drawMeshVerticesGizmos)
+        {
+            foreach (Vector3 vertex in debugVerts)
+            {
+                Gizmos.DrawCube(vertex, Vector3.one * cubeSize * .1f);
+            }
+        }
+
+        if (drawMeshEdgesGizmos)
+        {
+            for (int i = 0; i < debugTris.Length; i += 3)
+            {
+                Gizmos.DrawLine(debugVerts[debugTris[i]], debugVerts[debugTris[i + 1]]);
+                Gizmos.DrawLine(debugVerts[debugTris[i + 1]], debugVerts[debugTris[i + 2]]);
+                Gizmos.DrawLine(debugVerts[debugTris[i + 2]], debugVerts[debugTris[i]]);
+            }
+        }
+    }
+
+
+
+    [BurstCompile]
+    public void GenerateBlockPos()
+    {
+        stopwatch.Restart();
+
+        NativeList<int3> blockpositions = new NativeList<int3>(chunkSize * chunkSize * maxChunkHeight, Allocator.TempJob);
 
         for (int x = 0; x < chunkSize; x++)
         {
@@ -77,12 +110,14 @@ public class Chunk : MonoBehaviour
                 // Add block positions up to the max height
                 for (int y = 0; y < maxY; y++)
                 {
-                    blockpositions.Add(new float3(x, y, z));
+                    blockpositions.Add(new int3(x, y, z));
                 }
             }
         }
 
-        MeshCalculatorJob.CallGenerateMeshJob(blockpositions, cubeSize, atlasSize, meshFilter.mesh);
+        print("Configuring Chunk Data Took: " + stopwatch.ElapsedMilliseconds + "ms");
+
+        MeshCalculatorJob.CallGenerateMeshJob(blockpositions.AsArray(), cubeSize, atlasSize, meshFilter.mesh, GetComponent<MeshCollider>());
 
         blockpositions.Dispose();
 
@@ -213,15 +248,5 @@ public class Chunk : MonoBehaviour
             }
         }
         return edgePositions;
-    }
-
-
-
-
-
-
-    private void OnDrawGizmos()
-    {
-        Gizmos.DrawWireCube(transform.position + new Vector3(chunkSize * 0.5f - 0.5f, chunkSize * 0.5f - 0.5f, chunkSize * 0.5f - 0.5f), Vector3.one * chunkSize);
     }
 }
