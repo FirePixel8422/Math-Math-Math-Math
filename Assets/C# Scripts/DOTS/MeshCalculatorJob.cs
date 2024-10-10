@@ -3,6 +3,7 @@ using System.Collections;
 using System.Diagnostics;
 using Unity.Burst;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
@@ -20,7 +21,7 @@ public struct MeshCalculatorJob
 
         int blockPositionsLength = blockPositions.Length;
 
-        NativeHashMap<int3, bool> blockPositionsMap = new NativeHashMap<int3, bool>(blockPositions.Length, Allocator.TempJob);
+        NativeHashMap<int3, bool> blockPositionsMap = new NativeHashMap<int3, bool>(blockPositionsLength, Allocator.TempJob);
 
 
         NativeArray<float3> vertices = new NativeArray<float3>(blockPositionsLength * 24, Allocator.TempJob);
@@ -89,7 +90,7 @@ public struct MeshCalculatorJob
             triangles = triangles,
         };
 
-        jobHandle = setupDataJobParallel.Schedule(blockPositionsLength, 4096);
+        jobHandle = setupDataJobParallel.Schedule(blockPositionsLength, blockPositionsLength);
         jobHandle.Complete();
 
         #endregion
@@ -231,12 +232,11 @@ public struct MeshCalculatorJob
         public void Execute(int index)
         {
             int3 gridPosition = blockPositions[index];
-            blockPositionsMap.TryAdd(gridPosition, true);
+            blockPositionsMap.TryAdd(gridPosition, false);
 
             for (int i = 0; i < 36; i++)
             {
                 triangles[index * 36 + i] = -1;
-
             }
         }
     }
@@ -279,7 +279,7 @@ public struct MeshCalculatorJob
         [BurstCompile]
         public void Execute(int cubeIndex)
         {
-            int frontFaceVisible, backFaceVisible, leftFaceVisible, rightFaceVisible, topFaceVisible, bottomFaceVisible;
+            byte frontFaceVisible, backFaceVisible, leftFaceVisible, rightFaceVisible, topFaceVisible, bottomFaceVisible;
 
             int3 cubePosition = blockPositions[cubeIndex];
 
@@ -292,13 +292,23 @@ public struct MeshCalculatorJob
             int3 neighborPositionYMinus = cubePosition + neighborOffsets[5] * cubeSize;    // Y-
 
 
+
             // Use the NativeHashMap to check neighbor visibility
-            frontFaceVisible = !blockPositionsMap.ContainsKey(neighborPositionZPlus) ? 1 : 0;
-            backFaceVisible = !blockPositionsMap.ContainsKey(neighborPositionZMinus) ? 1 : 0;
-            leftFaceVisible = !blockPositionsMap.ContainsKey(neighborPositionXMinus) ? 1 : 0;
-            rightFaceVisible = !blockPositionsMap.ContainsKey(neighborPositionXPlus) ? 1 : 0;
-            topFaceVisible = !blockPositionsMap.ContainsKey(neighborPositionYPlus) ? 1 : 0;
-            bottomFaceVisible = !blockPositionsMap.ContainsKey(neighborPositionYMinus) ? 1 : 0;
+            frontFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionZPlus) ? 0 : 1);
+            backFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionZMinus) ? 0 : 1);
+            leftFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionXMinus) ? 0 : 1);
+            rightFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionXPlus) ? 0 : 1);
+            topFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionYPlus) ? 0 : 1);
+            bottomFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionYMinus) ? 0 : 1);
+
+
+            if (frontFaceVisible == 0 && backFaceVisible == 0 && leftFaceVisible == 0 && rightFaceVisible == 0 && bottomFaceVisible == 0 && topFaceVisible == 0) 
+            {
+                //if there will be no faces for this cube
+                return; // Skip this cube entirely
+            }
+
+
 
 
             int cCubeActiveStateIndex = cubeIndex * 6;
@@ -464,5 +474,4 @@ public struct MeshCalculatorJob
             }
         }
     }
-
 }
