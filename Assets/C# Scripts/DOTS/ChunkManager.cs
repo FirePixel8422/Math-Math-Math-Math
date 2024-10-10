@@ -23,7 +23,7 @@ public class ChunkManager : MonoBehaviour
 
     private void Start()
     {
-        Chunk[] chunkArray = FindObjectsOfType<Chunk>();
+        Chunk[] chunkArray = FindObjectsOfType<Chunk>(false);
 
         chunkList.AddRange(chunkArray);
 

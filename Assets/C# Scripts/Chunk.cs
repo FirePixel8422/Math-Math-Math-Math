@@ -9,6 +9,8 @@ using UnityEngine.Jobs;
 using Unity.VisualScripting;
 using Unity.Collections;
 using Unity.Mathematics;
+using System.Runtime.InteropServices;
+using Unity.Entities.UniversalDelegates;
 
 
 
@@ -47,6 +49,19 @@ public class Chunk : MonoBehaviour
     public int[] debugTris;
 
 
+    private void Update()
+    {
+        if (drawMeshVerticesGizmos)
+        {
+            debugVerts = meshFilter.mesh.vertices;
+        }
+
+        if (drawMeshEdgesGizmos)
+        {
+            debugTris = meshFilter.mesh.triangles;
+        }
+    }
+
 
 
     public bool drawMeshVerticesGizmos;
@@ -62,7 +77,7 @@ public class Chunk : MonoBehaviour
         {
             foreach (Vector3 vertex in debugVerts)
             {
-                Gizmos.DrawCube(vertex, Vector3.one * cubeSize * .1f);
+                Gizmos.DrawCube(vertex + transform.position, Vector3.one * cubeSize * .1f);
             }
         }
 
@@ -70,13 +85,35 @@ public class Chunk : MonoBehaviour
         {
             for (int i = 0; i < debugTris.Length; i += 3)
             {
-                Gizmos.DrawLine(debugVerts[debugTris[i]], debugVerts[debugTris[i + 1]]);
-                Gizmos.DrawLine(debugVerts[debugTris[i + 1]], debugVerts[debugTris[i + 2]]);
-                Gizmos.DrawLine(debugVerts[debugTris[i + 2]], debugVerts[debugTris[i]]);
+                Gizmos.DrawLine(debugVerts[debugTris[i]] + transform.position, debugVerts[debugTris[i + 1]] + transform.position);
+                Gizmos.DrawLine(debugVerts[debugTris[i + 1]] + transform.position, debugVerts[debugTris[i + 2]] + transform.position);
+                Gizmos.DrawLine(debugVerts[debugTris[i + 2]] + transform.position, debugVerts[debugTris[i]] + transform.position);
+            }
+        }
+
+        for (int i = 0; i < blockDebug.Count; i++)
+        {
+            
+        }
+
+        for (int x = 0; x < chunkSize; x++)
+        {
+            for (int z = 0; z < chunkSize; z++)
+            {
+                for (int y = 0; y < maxChunkHeight; y++)
+                {
+                    Gizmos.color = Color.black;
+                    if (blockDebug.Contains(new int3(x, y, z)))
+                    {
+                        Gizmos.color = Color.white;
+                    }
+
+                    Gizmos.DrawCube(new Vector3(x, y, z), Vector3.one * cubeSize * .2f);
+                }
             }
         }
     }
-
+    List<int3> blockDebug;
 
 
     [BurstCompile]
@@ -95,10 +132,14 @@ public class Chunk : MonoBehaviour
                 // Add block positions up to the max height
                 for (int y = 0; y < maxY; y++)
                 {
+                    //print(x + ", " + y + ", " + z);
                     blockPositions.Add(new int3(x, y, z));
                 }
             }
         }
+
+        blockDebug = blockPositions.AsArray().ToArray().ToList();
+
 
         MeshCalculatorJob.CallGenerateMeshJob(blockPositions.AsArray(), cubeSize, atlasSize, meshFilter.mesh, GetComponent<MeshCollider>());
 
