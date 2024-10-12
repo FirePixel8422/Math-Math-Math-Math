@@ -12,7 +12,7 @@ using UnityEngine;
 [BurstCompile]
 public struct MeshCalculatorJob
 {
-    public static void CallGenerateMeshJob(NativeArray<int3> blockPositions, int cubeSize, int atlasSize, Mesh mesh, MeshCollider coll)
+    public static void CallGenerateMeshJob(NativeArray<int3> blockPositions, int atlasSize, Mesh mesh, MeshCollider coll)
     {
         #region Main Data NativeContainers
 
@@ -36,7 +36,7 @@ public struct MeshCalculatorJob
 
         NativeArray<float3> faceVerticesOffsets = new NativeArray<float3>(24, Allocator.TempJob);
 
-        float3 halfCubeSize = 0.5f * cubeSize * Vector3.one;
+        float3 halfCubeSize = 0.5f * Vector3.one;
 
         faceVerticesOffsets[0] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
         faceVerticesOffsets[1] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
@@ -111,8 +111,6 @@ public struct MeshCalculatorJob
             triangles = triangles,
 
             cubeFacesActiveState = cubeFacesActiveState,
-
-            cubeSize = cubeSize,
         };
 
         jobHandle = generateMeshCubesJob.Schedule(blockPositionsLength, 4096);
@@ -262,8 +260,6 @@ public struct MeshCalculatorJob
         [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeArray<byte> cubeFacesActiveState;
 
-        [NoAlias][ReadOnly] public int cubeSize;
-
         readonly static int3[] neighborOffsets = new int3[]
         {
         new int3(0, 0, 1),     // Z+
@@ -284,12 +280,12 @@ public struct MeshCalculatorJob
             int3 cubePosition = blockPositions[cubeIndex];
 
 
-            int3 neighborPositionZPlus = cubePosition + neighborOffsets[0] * cubeSize;      // Z+
-            int3 neighborPositionZMinus = cubePosition + neighborOffsets[1] * cubeSize;    // Z-
-            int3 neighborPositionXMinus = cubePosition + neighborOffsets[2] * cubeSize;    // X-
-            int3 neighborPositionXPlus = cubePosition + neighborOffsets[3] * cubeSize;      // X+
-            int3 neighborPositionYPlus = cubePosition + neighborOffsets[4] * cubeSize;      // Y+
-            int3 neighborPositionYMinus = cubePosition + neighborOffsets[5] * cubeSize;    // Y-
+            int3 neighborPositionZPlus = cubePosition + neighborOffsets[0];      // Z+
+            int3 neighborPositionZMinus = cubePosition + neighborOffsets[1];    // Z-
+            int3 neighborPositionXMinus = cubePosition + neighborOffsets[2];    // X-
+            int3 neighborPositionXPlus = cubePosition + neighborOffsets[3];      // X+
+            int3 neighborPositionYPlus = cubePosition + neighborOffsets[4];      // Y+
+            int3 neighborPositionYMinus = cubePosition + neighborOffsets[5];    // Y-
 
 
 

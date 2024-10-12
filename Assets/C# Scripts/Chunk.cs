@@ -1,16 +1,8 @@
-
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
 using UnityEngine;
 using Unity.Burst;
-using UnityEngine.Jobs;
-using Unity.VisualScripting;
 using Unity.Collections;
 using Unity.Mathematics;
-using System.Runtime.InteropServices;
-using Unity.Entities.UniversalDelegates;
 
 
 
@@ -20,7 +12,7 @@ using Unity.Entities.UniversalDelegates;
 [BurstCompile]
 public class Chunk : MonoBehaviour
 {
-    public int cubeSize;
+    public ChunkData chunkData;
 
     public MeshRenderer meshRenderer;
     public MeshFilter meshFilter;
@@ -38,17 +30,30 @@ public class Chunk : MonoBehaviour
     public float lacunarity;
 
 
+    private int3 gridPos;
 
+
+    [BurstCompile]
     private void Start()
     {
-        noiseMap = NoiseMap.GenerateNoiseMap(chunkSize, chunkSize, seed, scale, octaves, persistence, lacunarity, new(transform.position.x, transform.position.z));
+        gridPos = new int3((int)transform.position.x, 0, (int)transform.position.z);
+
+        noiseMap = NoiseMap.GenerateNoiseMap(chunkSize, chunkSize, seed, scale, octaves, persistence, lacunarity, new int2(gridPos.x, gridPos.z));
     }
+
 
 
     [BurstCompile]
     public void GenerateBlockPos()
     {
-        NativeList<int3> blockPositions = new NativeList<int3>(chunkSize * chunkSize * maxChunkHeight, Allocator.TempJob);
+        int chunkSize_X_MaxHeight = chunkSize * maxChunkHeight;
+
+        NativeList<int3> blockPositions = new NativeList<int3>(chunkSize * chunkSize_X_MaxHeight, Allocator.TempJob);
+
+        NativeList<int3> blockPositionsList_Left = new NativeList<int3>(chunkSize_X_MaxHeight, Allocator.Temp);
+        NativeList<int3> blockPositionsList_Right = new NativeList<int3>(chunkSize_X_MaxHeight, Allocator.Temp);
+        NativeList<int3> blockPositionsList_Forward = new NativeList<int3>(chunkSize_X_MaxHeight, Allocator.Temp);
+        NativeList<int3> blockPositionsList_Back = new NativeList<int3>(chunkSize_X_MaxHeight, Allocator.Temp);
 
         for (int x = 0; x < chunkSize; x++)
         {
@@ -56,45 +61,70 @@ public class Chunk : MonoBehaviour
             {
                 // Get height from the noise map (assuming noiseMap is already normalized between 0 and 1)
                 int perlinValue = Mathf.FloorToInt(noiseMap[x, z] * maxChunkHeight);
-                int maxY = Mathf.Clamp(perlinValue, 0, maxChunkHeight);
+                int maxY = ClampPerlinValueUnderMax(perlinValue, maxChunkHeight);
 
                 // Add block positions up to the max height
                 for (int y = 0; y < maxY; y++)
                 {
+                    if (x == 0)
+                    {
+                        blockPositionsList_Left.Add(new int3(x, y, z));
+                    }
+                    else if (x == chunkSize - 1)
+                    {
+                        blockPositionsList_Right.Add(new int3(x, y, z));
+                    }
+
+                    if (z == 0)
+                    {
+                        blockPositionsList_Forward.Add(new int3(x, y, z));
+                    }
+                    else if (z == chunkSize - 1)
+                    {
+                        blockPositionsList_Back.Add(new int3(x, y, z));
+                    }
+
+
                     blockPositions.Add(new int3(x, y, z));
                 }
             }
         }
 
 
-        MeshCalculatorJob.CallGenerateMeshJob(blockPositions.AsArray(), cubeSize, atlasSize, meshFilter.mesh, GetComponent<MeshCollider>());
+        chunkData = new ChunkData()
+        {
+            gridPos = gridPos,
+
+            blockPositions_Left = new NativeArray<int3>(blockPositionsList_Left.Length, Allocator.Persistent),
+            blockPositions_Right = new NativeArray<int3>(blockPositionsList_Right.Length, Allocator.Persistent),
+            blockPositions_Forward = new NativeArray<int3>(blockPositionsList_Forward.Length, Allocator.Persistent),
+            blockPositions_Back = new NativeArray<int3>(blockPositionsList_Back.Length, Allocator.Persistent),
+        };
+
+        NativeArray<int3>.Copy(blockPositionsList_Left.AsArray(), chunkData.blockPositions_Left);
+        NativeArray<int3>.Copy(blockPositionsList_Right.AsArray(), chunkData.blockPositions_Right);
+        NativeArray<int3>.Copy(blockPositionsList_Forward.AsArray(), chunkData.blockPositions_Forward);
+        NativeArray<int3>.Copy(blockPositionsList_Back.AsArray(), chunkData.blockPositions_Back);
+
+        blockPositionsList_Left.Dispose();
+        blockPositionsList_Right.Dispose();
+        blockPositionsList_Forward.Dispose();
+        blockPositionsList_Back.Dispose();
+
+
+        MeshCalculatorJob.CallGenerateMeshJob(blockPositions.AsArray(), atlasSize, meshFilter.mesh, GetComponent<MeshCollider>());
 
         blockPositions.Dispose();
     }
 
-    private int CalculatePerlinNoiseHeight(int x, int z, Vector2Int resolution, float scale, int seed)
+    private int ClampPerlinValueUnderMax(int value, int max)
     {
-        float noiseHeight = 0;
-        float amplitude = 1;
-        float frequency = 1;
-        float maxPossibleHeight = 0;
-
-        for (int i = 0; i < octaves; i++)
+        if (value > max)
         {
-            float xCoord = (x + seed) / (float)resolution.x * scale * frequency;
-            float zCoord = (z + seed) / (float)resolution.y * scale * frequency;
-
-            float sample = Mathf.PerlinNoise(xCoord, zCoord);
-
-            noiseHeight += sample * amplitude;
-            maxPossibleHeight += amplitude;
-
-            amplitude *= persistence;
-            frequency *= lacunarity;
+            value = max;
         }
 
-        noiseHeight = noiseHeight / maxPossibleHeight;
-        return Mathf.FloorToInt(noiseHeight * maxChunkHeight);
+        return value;
     }
 
 
@@ -233,7 +263,7 @@ public class Chunk : MonoBehaviour
         {
             foreach (Vector3 vertex in debugVerts)
             {
-                Gizmos.DrawCube(vertex + transform.position, .1f * cubeSize * Vector3.one);
+                Gizmos.DrawCube(vertex + transform.position, .1f * Vector3.one);
             }
         }
 
@@ -279,11 +309,54 @@ public class Chunk : MonoBehaviour
                             Gizmos.color = Color.white;
                         }
 
-                        Gizmos.DrawCube(transform.position + new Vector3(x, y, z), Vector3.one * cubeSize * .2f);
+                        Gizmos.DrawCube(transform.position + new Vector3(x, y, z), Vector3.one * .2f);
                     }
                 }
             }
         }
     }
 #endif
+
+
+    private void Example()
+    {
+        int arrayCount = 20;
+        int arraySize = 20;
+
+        NativeArray<float> example2DArray = new NativeArray<float>(arrayCount * arraySize, Allocator.TempJob);
+
+
+        for (int i = 0; i < arrayCount; i++)
+        {
+            for (int index = 0; index < arraySize; index++)
+            {
+                example2DArray[i * arrayCount + index] = 1;
+            }
+        }
+
+
+
+        int indexX = 0;
+        int indexY = 4;
+
+
+        //pak waarde 0, 4 van de array
+        float value = example2DArray[arrayCount * indexX + indexY];
+
+
+        example2DArray.Dispose();
+    }
+}
+
+
+
+[System.Serializable]
+public struct ChunkData
+{
+    public int3 gridPos;
+
+    public NativeArray<int3> blockPositions_Left;
+    public NativeArray<int3> blockPositions_Right;
+    public NativeArray<int3> blockPositions_Forward;
+    public NativeArray<int3> blockPositions_Back;
 }
