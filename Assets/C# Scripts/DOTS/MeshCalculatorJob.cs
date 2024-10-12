@@ -34,50 +34,7 @@ public struct MeshCalculatorJob
 
         NativeArray<byte> cubeFacesActiveState = new NativeArray<byte>(blockPositionsLength * 6, Allocator.TempJob);
 
-        NativeArray<float3> faceVerticesOffsets = new NativeArray<float3>(24, Allocator.TempJob);
-
-        float3 halfCubeSize = 0.5f * Vector3.one;
-
-        faceVerticesOffsets[0] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
-        faceVerticesOffsets[1] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
-        faceVerticesOffsets[2] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
-        faceVerticesOffsets[3] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
-        faceVerticesOffsets[4] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
-        faceVerticesOffsets[5] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
-        faceVerticesOffsets[6] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
-        faceVerticesOffsets[7] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
-        faceVerticesOffsets[8] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
-        faceVerticesOffsets[9] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
-        faceVerticesOffsets[10] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
-        faceVerticesOffsets[11] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
-        faceVerticesOffsets[12] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
-        faceVerticesOffsets[13] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
-        faceVerticesOffsets[14] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
-        faceVerticesOffsets[15] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
-        faceVerticesOffsets[16] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
-        faceVerticesOffsets[17] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
-        faceVerticesOffsets[18] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
-        faceVerticesOffsets[19] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
-        faceVerticesOffsets[20] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
-        faceVerticesOffsets[21] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
-        faceVerticesOffsets[22] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
-        faceVerticesOffsets[23] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
-
-
-        NativeArray<float3> faceVertices = new NativeArray<float3>(24, Allocator.TempJob);
-
-        for (int i = 0; i < 6; i++) // 6 faces
-        {
-            // Calculate the index offsets for each face's vertices
-            int baseIndex = i * 4; // 4 vertices per face
-            faceVertices[baseIndex + 0] = faceVerticesOffsets[baseIndex + 0];
-            faceVertices[baseIndex + 1] = faceVerticesOffsets[baseIndex + 1];
-            faceVertices[baseIndex + 2] = faceVerticesOffsets[baseIndex + 2];
-            faceVertices[baseIndex + 3] = faceVerticesOffsets[baseIndex + 3];
-        }
-
         #endregion
-
 
 
 
@@ -91,7 +48,6 @@ public struct MeshCalculatorJob
         };
 
         jobHandle = setupDataJobParallel.Schedule(blockPositionsLength, blockPositionsLength);
-        jobHandle.Complete();
 
         #endregion
 
@@ -106,25 +62,13 @@ public struct MeshCalculatorJob
             blockPositionsMap = blockPositionsMap,
 
             vertices = vertices,
-            faceVertices = faceVertices,
 
             triangles = triangles,
 
             cubeFacesActiveState = cubeFacesActiveState,
         };
 
-        jobHandle = generateMeshCubesJob.Schedule(blockPositionsLength, 4096);
-        jobHandle.Complete();
-
-        #endregion
-
-
-        #region Dispose All NativeContainers That Are Done Being Used
-
-        faceVertices.Dispose();
-
-        blockPositions.Dispose();
-        blockPositionsMap.Dispose();
+        jobHandle = generateMeshCubesJob.Schedule(blockPositionsLength, 4096, jobHandle);
 
         #endregion
 
@@ -145,17 +89,8 @@ public struct MeshCalculatorJob
             filteredTriangles = filteredTriangles,
         };
 
-        jobHandle = finalizeMeshMathJob.Schedule();
+        jobHandle = finalizeMeshMathJob.Schedule(jobHandle);
         jobHandle.Complete();
-
-        #endregion
-
-
-        #region Dispose All NativeContainers That Are Done Being Used
-
-        vertices.Dispose();
-
-        triangles.Dispose();
 
         #endregion
 
@@ -165,7 +100,17 @@ public struct MeshCalculatorJob
         ApplyMeshToObject(filteredVertices, filteredTriangles, cubeFacesActiveState, textureIndexs, atlasSize, mesh, coll);
 
 
-        #region Dispose All Remaining Native Containers That Are Done Being Used After ApplyMeshToObject
+
+
+        #region Dispose All Native Containers That Are Done Being Used After ApplyMeshToObject
+
+        blockPositions.Dispose();
+        blockPositionsMap.Dispose();
+
+        vertices.Dispose();
+
+        triangles.Dispose();
+
 
         textureIndexs.Dispose();
 
@@ -180,44 +125,12 @@ public struct MeshCalculatorJob
     }
 
 
-    public static void ApplyMeshToObject(NativeList<float3> vertices, NativeList<int> triangles, NativeArray<byte> cubeFacesActiveState, NativeArray<int> textureIndexs, int atlasSize, Mesh mesh, MeshCollider coll)
-    {
-        NativeArray<float2> uvs = new NativeArray<float2>(vertices.Length, Allocator.Persistent);
-        TextureCalculator.ScheduleUVGeneration(uvs, vertices.Length, cubeFacesActiveState, textureIndexs, atlasSize);
-
-
-
-        if (vertices.Length > 65535)
-        {
-            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        }
-
-        Vector3[] verticesVectors = new Vector3[vertices.Length];
-
-        for (int i = 0; i < verticesVectors.Length; i++)
-        {
-            verticesVectors[i] = new Vector3(vertices[i].x, vertices[i].y, vertices[i].z);
-        }
-
-        mesh.vertices = vertices.AsArray().Reinterpret<Vector3>().ToArray();
-        mesh.triangles = triangles.AsArray().ToArray();
-
-        mesh.uv = uvs.Reinterpret<Vector2>().ToArray();
-
-        mesh.RecalculateNormals();
-        mesh.RecalculateBounds();
-
-        coll.sharedMesh = mesh;
-
-        uvs.Dispose();
-    }
-
-
+    
 
 
 
     [BurstCompile]
-    public struct SetupDataJobParallel : IJobParallelFor
+    private struct SetupDataJobParallel : IJobParallelFor
     {
         [NoAlias][ReadOnly] public NativeArray<int3> blockPositions;
 
@@ -243,7 +156,7 @@ public struct MeshCalculatorJob
 
 
     [BurstCompile]
-    public struct GenerateMeshCubesJobParallel : IJobParallelFor
+    private struct GenerateMeshCubesJobParallel : IJobParallelFor
     {
         [NoAlias][ReadOnly] public NativeArray<int3> blockPositions;
 
@@ -252,7 +165,42 @@ public struct MeshCalculatorJob
         [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeArray<float3> vertices;
 
-        [NoAlias][ReadOnly] public NativeArray<float3> faceVertices;
+
+
+        [NoAlias][ReadOnly] private static float3 halfCubeSize = new float3(0.5f, 0.5f, 0.5f);
+
+        [NoAlias] private static float3[] faceVertices = new float3[24];
+
+        static GenerateMeshCubesJobParallel()
+        {
+            faceVertices[0] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+            faceVertices[1] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+            faceVertices[2] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+            faceVertices[3] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+            faceVertices[4] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+            faceVertices[5] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+            faceVertices[6] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+            faceVertices[7] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+            faceVertices[8] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+            faceVertices[9] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+            faceVertices[10] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+            faceVertices[11] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+            faceVertices[12] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+            faceVertices[13] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+            faceVertices[14] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+            faceVertices[15] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+            faceVertices[16] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+            faceVertices[17] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
+            faceVertices[18] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+            faceVertices[19] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
+            faceVertices[20] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+            faceVertices[21] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
+            faceVertices[22] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+            faceVertices[23] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
+        }
+
+
+
 
         [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeArray<int> triangles;
@@ -260,7 +208,7 @@ public struct MeshCalculatorJob
         [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeArray<byte> cubeFacesActiveState;
 
-        readonly static int3[] neighborOffsets = new int3[]
+        private readonly static int3[] neighborOffsets = new int3[]
         {
         new int3(0, 0, 1),     // Z+
         new int3(0, 0, -1),    // Z-
@@ -269,6 +217,7 @@ public struct MeshCalculatorJob
         new int3(0, 1, 0),     // Y+
         new int3(0, -1, 0)     // Y-
         };
+
 
 
 
@@ -423,7 +372,7 @@ public struct MeshCalculatorJob
 
 
     [BurstCompile]
-    public struct FinalizeMeshMathJob : IJob
+    private struct FinalizeMeshMathJob : IJob
     {
         [NoAlias][ReadOnly] public NativeArray<float3> vertices;
         [NoAlias][ReadOnly] public NativeArray<int> triangles;
@@ -470,4 +419,40 @@ public struct MeshCalculatorJob
             }
         }
     }
+
+
+
+
+    private static void ApplyMeshToObject(NativeList<float3> vertices, NativeList<int> triangles, NativeArray<byte> cubeFacesActiveState, NativeArray<int> textureIndexs, int atlasSize, Mesh mesh, MeshCollider coll)
+    {
+        NativeArray<float2> uvs = new NativeArray<float2>(vertices.Length, Allocator.Persistent);
+        TextureCalculator.ScheduleUVGeneration(uvs, vertices.Length, cubeFacesActiveState, textureIndexs, atlasSize);
+
+
+
+        if (vertices.Length > 65535)
+        {
+            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        }
+
+        Vector3[] verticesVectors = new Vector3[vertices.Length];
+
+        for (int i = 0; i < verticesVectors.Length; i++)
+        {
+            verticesVectors[i] = new Vector3(vertices[i].x, vertices[i].y, vertices[i].z);
+        }
+
+        mesh.vertices = vertices.AsArray().Reinterpret<Vector3>().ToArray();
+        mesh.triangles = triangles.AsArray().ToArray();
+
+        mesh.uv = uvs.Reinterpret<Vector2>().ToArray();
+
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        coll.sharedMesh = mesh;
+
+        uvs.Dispose();
+    }
+
 }

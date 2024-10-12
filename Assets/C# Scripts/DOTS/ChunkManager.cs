@@ -5,11 +5,7 @@ using Unity.Mathematics;
 using UnityEngine;
 public class ChunkManager : MonoBehaviour
 {
-    public static ChunkManager Instance;
-    private void Awake()
-    {
-        Instance = this;
-    }
+    private static List<Chunk> chunkList;
 
 
 
@@ -17,24 +13,26 @@ public class ChunkManager : MonoBehaviour
 
     public float batchDelay;
 
-    public List<Chunk> chunkList;
-
     private NativeHashMap<int3, ChunkData> chunks;
 
 
 
     private void Start()
     {
-        Chunk[] chunkArray = FindObjectsOfType<Chunk>(false);
+        Chunk[] chunkArray = FindObjectsOfType<Chunk>();
+
+        chunkList = new List<Chunk>(chunkArray.Length);
 
         chunkList.AddRange(chunkArray);
+
+        chunks = new NativeHashMap<int3, ChunkData>(chunkArray.Length, Allocator.Persistent);
 
         StartCoroutine(CallChunks());
     }
 
 
 
-    public void AddChunksToQue(Chunk chunk)
+    public static void AddChunksToQue(Chunk chunk)
     {
         chunkList.Add(chunk);
     }
@@ -49,13 +47,13 @@ public class ChunkManager : MonoBehaviour
 
             for (int i = 0; i < chunkCallsPerFrame; i++)
             {
-                chunkList[0].GenerateBlockPos();
+                chunkList[0].Init();
 
                 chunks.TryAdd(chunkList[0].chunkData.gridPos, chunkList[0].chunkData);
 
                 chunkList.RemoveAt(0);
 
-                if(chunkList.Count == 0)
+                if (chunkList.Count == 0)
                 {
                     break;
                 }

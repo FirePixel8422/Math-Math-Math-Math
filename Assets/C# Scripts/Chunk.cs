@@ -34,17 +34,19 @@ public class Chunk : MonoBehaviour
 
 
     [BurstCompile]
-    private void Start()
+    public void Init()
     {
         gridPos = new int3((int)transform.position.x, 0, (int)transform.position.z);
 
         noiseMap = NoiseMap.GenerateNoiseMap(chunkSize, chunkSize, seed, scale, octaves, persistence, lacunarity, new int2(gridPos.x, gridPos.z));
+
+        GenerateBlockPos();
     }
 
 
 
     [BurstCompile]
-    public void GenerateBlockPos()
+    private void GenerateBlockPos()
     {
         int chunkSize_X_MaxHeight = chunkSize * maxChunkHeight;
 
@@ -60,7 +62,7 @@ public class Chunk : MonoBehaviour
             for (int z = 0; z < chunkSize; z++)
             {
                 // Get height from the noise map (assuming noiseMap is already normalized between 0 and 1)
-                int perlinValue = Mathf.FloorToInt(noiseMap[x, z] * maxChunkHeight);
+                int perlinValue = (int)(noiseMap[x, z] * maxChunkHeight);
                 int maxY = ClampPerlinValueUnderMax(perlinValue, maxChunkHeight);
 
                 // Add block positions up to the max height
@@ -90,15 +92,22 @@ public class Chunk : MonoBehaviour
             }
         }
 
+        int leftCount = blockPositionsList_Left.Length;
+        int rightCount = blockPositionsList_Right.Length;
+        int forwardCount = blockPositionsList_Forward.Length;
+        int backCount = blockPositionsList_Back.Length;
+
 
         chunkData = new ChunkData()
         {
             gridPos = gridPos,
 
-            blockPositions_Left = new NativeArray<int3>(blockPositionsList_Left.Length, Allocator.Persistent),
-            blockPositions_Right = new NativeArray<int3>(blockPositionsList_Right.Length, Allocator.Persistent),
-            blockPositions_Forward = new NativeArray<int3>(blockPositionsList_Forward.Length, Allocator.Persistent),
-            blockPositions_Back = new NativeArray<int3>(blockPositionsList_Back.Length, Allocator.Persistent),
+            Count = leftCount + rightCount + forwardCount + backCount,
+
+            blockPositions_Left = new NativeArray<int3>(leftCount, Allocator.Persistent),
+            blockPositions_Right = new NativeArray<int3>(rightCount, Allocator.Persistent),
+            blockPositions_Forward = new NativeArray<int3>(forwardCount, Allocator.Persistent),
+            blockPositions_Back = new NativeArray<int3>(backCount, Allocator.Persistent),
         };
 
         NativeArray<int3>.Copy(blockPositionsList_Left.AsArray(), chunkData.blockPositions_Left);
@@ -110,6 +119,7 @@ public class Chunk : MonoBehaviour
         blockPositionsList_Right.Dispose();
         blockPositionsList_Forward.Dispose();
         blockPositionsList_Back.Dispose();
+
 
 
         MeshCalculatorJob.CallGenerateMeshJob(blockPositions.AsArray(), atlasSize, meshFilter.mesh, GetComponent<MeshCollider>());
@@ -126,101 +136,6 @@ public class Chunk : MonoBehaviour
 
         return value;
     }
-
-
-    #region Test Code for later
-
-    public Vector3Int chunkPosition; // Position of the chunk in the chunk grid (chunk coordinates)
-
-    public List<Vector3Int> GetConnectedEdge(Chunk neighbor)
-    {
-        List<Vector3Int> edgePositions = new List<Vector3Int>();
-
-        // Determine which side is connected to the current chunk based on relative position
-        if (neighbor.chunkPosition.x < this.chunkPosition.x)
-        {
-            // Neighbor is on the left (West), return right edge
-            edgePositions = GetEdgePositionsRight();
-        }
-        else if (neighbor.chunkPosition.x > this.chunkPosition.x)
-        {
-            // Neighbor is on the right (East), return left edge
-            edgePositions = GetEdgePositionsLeft();
-        }
-        else if (neighbor.chunkPosition.z > this.chunkPosition.z)
-        {
-            // Neighbor is in front (North), return back edge
-            edgePositions = GetEdgePositionsBack();
-        }
-        else if (neighbor.chunkPosition.z < this.chunkPosition.z)
-        {
-            // Neighbor is behind (South), return front edge
-            edgePositions = GetEdgePositionsFront();
-        }
-
-        return edgePositions;
-    }
-
-
-
-    // Get the right edge (x = 15) of this chunk
-    private List<Vector3Int> GetEdgePositionsRight()
-    {
-        List<Vector3Int> edgePositions = new List<Vector3Int>();
-        for (int y = 0; y < chunkSize; y++)
-        {
-            for (int z = 0; z < chunkSize; z++)
-            {
-                edgePositions.Add(new Vector3Int(chunkSize - 1, y, z));
-            }
-        }
-        return edgePositions;
-    }
-
-    // Get the left edge (x = 0) of this chunk
-    private List<Vector3Int> GetEdgePositionsLeft()
-    {
-        List<Vector3Int> edgePositions = new List<Vector3Int>();
-        for (int y = 0; y < chunkSize; y++)
-        {
-            for (int z = 0; z < chunkSize; z++)
-            {
-                edgePositions.Add(new Vector3Int(0, y, z));
-            }
-        }
-        return edgePositions;
-    }
-
-    // Get the back edge (z = 15) of this chunk
-    private List<Vector3Int> GetEdgePositionsBack()
-    {
-        List<Vector3Int> edgePositions = new List<Vector3Int>();
-        for (int y = 0; y < chunkSize; y++)
-        {
-            for (int x = 0; x < chunkSize; x++)
-            {
-                edgePositions.Add(new Vector3Int(x, y, chunkSize - 1));
-            }
-        }
-        return edgePositions;
-    }
-
-    // Get the front edge (z = 0) of this chunk
-    private List<Vector3Int> GetEdgePositionsFront()
-    {
-        List<Vector3Int> edgePositions = new List<Vector3Int>();
-        for (int y = 0; y < chunkSize; y++)
-        {
-            for (int x = 0; x < chunkSize; x++)
-            {
-                edgePositions.Add(new Vector3Int(x, y, 0));
-            }
-        }
-        return edgePositions;
-    }
-
-    #endregion
-
 
 
 
@@ -354,6 +269,8 @@ public class Chunk : MonoBehaviour
 public struct ChunkData
 {
     public int3 gridPos;
+
+    public int Count;
 
     public NativeArray<int3> blockPositions_Left;
     public NativeArray<int3> blockPositions_Right;
