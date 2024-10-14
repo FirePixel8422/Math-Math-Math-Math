@@ -3,6 +3,7 @@ using UnityEngine;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Mathematics;
+using System.Diagnostics;
 
 
 
@@ -18,39 +19,40 @@ public class Chunk : MonoBehaviour
     public MeshFilter meshFilter;
     public MeshCollider meshCollider;
 
-    public int atlasSize;
-
-    public int chunkSize, maxChunkHeight;
-    public int seed;
     public float[,] noiseMap;
-
-    public float scale;
-    public int octaves;
-    public float persistence;
-    public float lacunarity;
-
-
-    private int3 gridPos;
 
 
     [BurstCompile]
-    public void Init()
+    public void LoadChunk(int chunkSize, int maxChunkHeight, int seed, float scale, int octaves, float persistence, float lacunarity)
     {
-        gridPos = new int3((int)transform.position.x, 0, (int)transform.position.z);
 
-        noiseMap = NoiseMap.GenerateNoiseMap(chunkSize, chunkSize, seed, scale, octaves, persistence, lacunarity, new int2(gridPos.x, gridPos.z));
+#if UNITY_EDITOR
+        if (debugMode)
+        {
+            sw = new Stopwatch();
 
-        GenerateBlockPos();
+            debugChunkSize = chunkSize;
+            debugMaxChunkHeight = maxChunkHeight;
+        }
+#endif
+
+
+        int3 worldPos = new int3((int)transform.position.x, 0, (int)transform.position.z);
+
+        noiseMap = NoiseMap.GenerateNoiseMap(chunkSize, seed, scale, octaves, persistence, lacunarity, new int2(worldPos.x, worldPos.z));
+
+        GenerateBlockPos(chunkSize, maxChunkHeight, worldPos / chunkSize);
     }
 
 
 
+
     [BurstCompile]
-    private void GenerateBlockPos()
+    private void GenerateBlockPos(int chunkSize, int maxChunkHeight, int3 gridPos)
     {
         int chunkSize_X_MaxHeight = chunkSize * maxChunkHeight;
 
-        NativeList<int3> blockPositions = new NativeList<int3>(chunkSize * chunkSize_X_MaxHeight, Allocator.TempJob);
+        NativeList<int3> blockPositionsList = new NativeList<int3>(chunkSize * chunkSize_X_MaxHeight, Allocator.Temp);
 
         NativeList<int3> blockPositionsList_Left = new NativeList<int3>(chunkSize_X_MaxHeight, Allocator.Temp);
         NativeList<int3> blockPositionsList_Right = new NativeList<int3>(chunkSize_X_MaxHeight, Allocator.Temp);
@@ -70,24 +72,24 @@ public class Chunk : MonoBehaviour
                 {
                     if (x == 0)
                     {
-                        blockPositionsList_Left.Add(new int3(x, y, z));
+                        blockPositionsList_Left.Add(new int3(x + chunkSize, y, z + chunkSize));
                     }
                     else if (x == chunkSize - 1)
                     {
-                        blockPositionsList_Right.Add(new int3(x, y, z));
+                        blockPositionsList_Right.Add(new int3(x + chunkSize, y, z + chunkSize));
                     }
 
                     if (z == 0)
                     {
-                        blockPositionsList_Forward.Add(new int3(x, y, z));
+                        blockPositionsList_Forward.Add(new int3(x + chunkSize, y, z + chunkSize));
                     }
                     else if (z == chunkSize - 1)
                     {
-                        blockPositionsList_Back.Add(new int3(x, y, z));
+                        blockPositionsList_Back.Add(new int3(x + chunkSize, y, z + chunkSize));
                     }
 
 
-                    blockPositions.Add(new int3(x, y, z));
+                    blockPositionsList.Add(new int3(x, y, z));
                 }
             }
         }
@@ -102,7 +104,7 @@ public class Chunk : MonoBehaviour
         {
             gridPos = gridPos,
 
-            Count = leftCount + rightCount + forwardCount + backCount,
+            blockPositions = new NativeArray<int3>(blockPositionsList.Length, Allocator.Persistent),
 
             blockPositions_Left = new NativeArray<int3>(leftCount, Allocator.Persistent),
             blockPositions_Right = new NativeArray<int3>(rightCount, Allocator.Persistent),
@@ -110,23 +112,42 @@ public class Chunk : MonoBehaviour
             blockPositions_Back = new NativeArray<int3>(backCount, Allocator.Persistent),
         };
 
+        NativeArray<int3>.Copy(blockPositionsList.AsArray(), chunkData.blockPositions);
+
         NativeArray<int3>.Copy(blockPositionsList_Left.AsArray(), chunkData.blockPositions_Left);
         NativeArray<int3>.Copy(blockPositionsList_Right.AsArray(), chunkData.blockPositions_Right);
         NativeArray<int3>.Copy(blockPositionsList_Forward.AsArray(), chunkData.blockPositions_Forward);
         NativeArray<int3>.Copy(blockPositionsList_Back.AsArray(), chunkData.blockPositions_Back);
 
+
+        if (debugMode)
+        {
+            print(chunkData.blockPositions_Left.Length);
+            print(chunkData.blockPositions_Right.Length);
+            print(chunkData.blockPositions_Forward.Length);
+            print(chunkData.blockPositions_Back.Length);
+        }
+
+        blockPositionsList.Dispose();
+
         blockPositionsList_Left.Dispose();
         blockPositionsList_Right.Dispose();
         blockPositionsList_Forward.Dispose();
         blockPositionsList_Back.Dispose();
-
-
-
-        MeshCalculatorJob.CallGenerateMeshJob(blockPositions.AsArray(), atlasSize, meshFilter.mesh, GetComponent<MeshCollider>());
-
-        blockPositions.Dispose();
     }
 
+
+    [BurstCompile]
+    public void RenderChunk(int atlasSize)
+    {
+        MeshCalculatorJob.CallGenerateMeshJob(chunkData.gridPos, chunkData.blockPositions, atlasSize, meshFilter.mesh, meshCollider, debugMode);
+
+        //chunkData.blockPositions.Dispose();
+    }
+
+
+
+    [BurstCompile]
     private int ClampPerlinValueUnderMax(int value, int max)
     {
         if (value > max)
@@ -139,7 +160,9 @@ public class Chunk : MonoBehaviour
 
 
 
-#if UNITY_EDITOR
+
+
+    public Stopwatch sw;
 
     private Vector3[] debugVerts;
     private int[] debugTris;
@@ -159,6 +182,11 @@ public class Chunk : MonoBehaviour
         }
     }
 
+    [Header("If this is disabled before staring play mode, no gizmos will exist")]
+    public bool debugMode;
+
+    public int debugChunkSize, debugMaxChunkHeight;
+
 
     public bool drawMeshGizmos;
     public bool drawMeshVerticesGizmos;
@@ -167,9 +195,14 @@ public class Chunk : MonoBehaviour
 
     private void OnDrawGizmos()
     {
+        if (debugMode == false)
+        {
+            return;
+        }
+
         if (drawMeshGizmos)
         {
-            Gizmos.DrawWireCube(transform.position + new Vector3(chunkSize * 0.5f - 0.5f, maxChunkHeight / 2 - 0.5f, chunkSize * 0.5f - 0.5f), new Vector3(chunkSize, maxChunkHeight, chunkSize));
+            Gizmos.DrawWireCube(transform.position + new Vector3(debugChunkSize * 0.5f - 0.5f, debugMaxChunkHeight / 2 - 0.5f, debugChunkSize * 0.5f - 0.5f), new Vector3(debugChunkSize, debugMaxChunkHeight, debugChunkSize));
         }
 
 
@@ -195,13 +228,13 @@ public class Chunk : MonoBehaviour
         {
             if (blockDebug.Count == 0)
             {
-                for (int x = 0; x < chunkSize; x++)
+                for (int x = 0; x < debugChunkSize; x++)
                 {
-                    for (int z = 0; z < chunkSize; z++)
+                    for (int z = 0; z < debugChunkSize; z++)
                     {
                         // Get height from the noise map (assuming noiseMap is already normalized between 0 and 1)
-                        int perlinValue = Mathf.FloorToInt(noiseMap[x, z] * maxChunkHeight);
-                        int maxY = Mathf.Clamp(perlinValue, 0, maxChunkHeight);
+                        int perlinValue = Mathf.FloorToInt(noiseMap[x, z] * debugMaxChunkHeight);
+                        int maxY = Mathf.Clamp(perlinValue, 0, debugMaxChunkHeight);
 
                         // Add block positions up to the max height
                         for (int y = 0; y < maxY; y++)
@@ -212,11 +245,11 @@ public class Chunk : MonoBehaviour
                 }
             }
 
-            for (int x = 0; x < chunkSize; x++)
+            for (int x = 0; x < debugChunkSize; x++)
             {
-                for (int z = 0; z < chunkSize; z++)
+                for (int z = 0; z < debugChunkSize; z++)
                 {
-                    for (int y = 0; y < maxChunkHeight; y++)
+                    for (int y = 0; y < debugMaxChunkHeight; y++)
                     {
                         Gizmos.color = Color.black;
                         if (blockDebug.Contains(new int3(x, y, z)))
@@ -230,7 +263,7 @@ public class Chunk : MonoBehaviour
             }
         }
     }
-#endif
+
 
 
     private void Example()
@@ -270,7 +303,7 @@ public struct ChunkData
 {
     public int3 gridPos;
 
-    public int Count;
+    public NativeArray<int3> blockPositions;
 
     public NativeArray<int3> blockPositions_Left;
     public NativeArray<int3> blockPositions_Right;

@@ -70,13 +70,12 @@ public class GameManager : MonoBehaviour
     public void GenerateChunk(Vector3 position)
     {
         Chunk chunk = Instantiate(chunkPrefab, position, Quaternion.identity).GetComponent<Chunk>();
-        chunk.seed = seed;
-        chunk.scale = scale;
-        chunk.octaves = octaves;
-        chunk.persistence = persistence;
-        chunk.chunkSize = chunkSize;
-        chunk.maxChunkHeight = maxChunkHeight;
-        chunk.lacunarity = lacunarity;
+        
+
+        //CALL Chunk.Init(data)
+
+
+
         //chunk.chunkGridPos = new Vector2Int(Mathf.RoundToInt(position.x / chunkSize), Mathf.RoundToInt(position.z / chunkSize));
         chunksList.Add(chunk);
     }

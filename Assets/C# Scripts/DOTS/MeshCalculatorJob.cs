@@ -12,11 +12,11 @@ using UnityEngine;
 [BurstCompile]
 public struct MeshCalculatorJob
 {
-    public static void CallGenerateMeshJob(NativeArray<int3> blockPositions, int atlasSize, Mesh mesh, MeshCollider coll)
+    public static void CallGenerateMeshJob(int3 chunkGridPos, NativeArray<int3> blockPositions, int atlasSize, Mesh mesh, MeshCollider coll, bool debugMode = false)
     {
         #region Main Data NativeContainers
 
-        JobHandle jobHandle;
+        JobHandle mainJobHandle;
 
 
         int blockPositionsLength = blockPositions.Length;
@@ -47,7 +47,24 @@ public struct MeshCalculatorJob
             triangles = triangles,
         };
 
-        jobHandle = setupDataJobParallel.Schedule(blockPositionsLength, blockPositionsLength);
+        mainJobHandle = setupDataJobParallel.Schedule(blockPositionsLength, blockPositionsLength);
+
+        #endregion
+
+
+
+
+        #region Calculate ConnectedChunks Edge Positions Job
+
+        NativeArray<int3> connectedChunkEdgePositions = ChunkManager.GetConnectedChunkEdgePositionsCount(chunkGridPos, debugMode);
+
+        CalculateChunkConnectionsJobParallel calculateChunkConnectionsJobParallel = new CalculateChunkConnectionsJobParallel
+        {
+            blockPositions = connectedChunkEdgePositions,
+            blockPositionsMap = blockPositionsMap,
+        };
+
+        mainJobHandle = JobHandle.CombineDependencies(mainJobHandle, calculateChunkConnectionsJobParallel.Schedule(connectedChunkEdgePositions.Length, connectedChunkEdgePositions.Length, mainJobHandle));
 
         #endregion
 
@@ -68,7 +85,7 @@ public struct MeshCalculatorJob
             cubeFacesActiveState = cubeFacesActiveState,
         };
 
-        jobHandle = generateMeshCubesJob.Schedule(blockPositionsLength, 4096, jobHandle);
+        mainJobHandle = generateMeshCubesJob.Schedule(blockPositionsLength, blockPositionsLength, mainJobHandle);
 
         #endregion
 
@@ -89,8 +106,11 @@ public struct MeshCalculatorJob
             filteredTriangles = filteredTriangles,
         };
 
-        jobHandle = finalizeMeshMathJob.Schedule(jobHandle);
-        jobHandle.Complete();
+        mainJobHandle = finalizeMeshMathJob.Schedule(mainJobHandle);
+        mainJobHandle.Complete();
+
+        //UnityEngine.Debug.Log(blockPositions.Length + "blocks");
+        //UnityEngine.Debug.Log(blockPositionsMap.Count + "blocks in map");
 
         #endregion
 
@@ -120,12 +140,14 @@ public struct MeshCalculatorJob
 
         filteredTriangles.Dispose();
 
+        connectedChunkEdgePositions.Dispose();
+
         #endregion
 
     }
 
 
-    
+
 
 
 
@@ -153,6 +175,23 @@ public struct MeshCalculatorJob
     }
 
 
+    [BurstCompile]
+    private struct CalculateChunkConnectionsJobParallel : IJobParallelFor
+    {
+        [NoAlias][ReadOnly] public NativeArray<int3> blockPositions;
+
+        [NativeDisableParallelForRestriction]
+        [NativeDisableContainerSafetyRestriction]
+        [NoAlias][WriteOnly] public NativeHashMap<int3, bool> blockPositionsMap;
+
+        public void Execute(int index)
+        {
+            int3 gridPosition = blockPositions[index];
+            blockPositionsMap.TryAdd(gridPosition, false);
+        }
+    }
+
+
 
 
     [BurstCompile]
@@ -166,58 +205,54 @@ public struct MeshCalculatorJob
         [NoAlias][WriteOnly] public NativeArray<float3> vertices;
 
 
-
-        [NoAlias][ReadOnly] private static float3 halfCubeSize = new float3(0.5f, 0.5f, 0.5f);
-
-        [NoAlias] private static float3[] faceVertices = new float3[24];
-
-        static GenerateMeshCubesJobParallel()
-        {
-            faceVertices[0] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
-            faceVertices[1] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
-            faceVertices[2] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
-            faceVertices[3] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
-            faceVertices[4] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
-            faceVertices[5] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
-            faceVertices[6] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
-            faceVertices[7] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
-            faceVertices[8] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
-            faceVertices[9] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
-            faceVertices[10] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
-            faceVertices[11] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
-            faceVertices[12] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
-            faceVertices[13] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
-            faceVertices[14] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
-            faceVertices[15] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
-            faceVertices[16] = new float3(-halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
-            faceVertices[17] = new float3(halfCubeSize.x, halfCubeSize.y, -halfCubeSize.z);
-            faceVertices[18] = new float3(halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
-            faceVertices[19] = new float3(-halfCubeSize.x, halfCubeSize.y, halfCubeSize.z);
-            faceVertices[20] = new float3(-halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
-            faceVertices[21] = new float3(halfCubeSize.x, -halfCubeSize.y, -halfCubeSize.z);
-            faceVertices[22] = new float3(halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
-            faceVertices[23] = new float3(-halfCubeSize.x, -halfCubeSize.y, halfCubeSize.z);
-        }
-
-
-
-
         [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeArray<int> triangles;
 
         [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeArray<byte> cubeFacesActiveState;
 
-        private readonly static int3[] neighborOffsets = new int3[]
+
+        [NoAlias]
+        [ReadOnly]
+        private static readonly int3[] neighborOffsets = new int3[]
         {
-        new int3(0, 0, 1),     // Z+
-        new int3(0, 0, -1),    // Z-
-        new int3(-1, 0, 0),    // X-
-        new int3(1, 0, 0),     // X+
-        new int3(0, 1, 0),     // Y+
-        new int3(0, -1, 0)     // Y-
+            new int3(0, 0, 1),     // Z+
+            new int3(0, 0, -1),    // Z-
+            new int3(-1, 0, 0),    // X-
+            new int3(1, 0, 0),     // X+
+            new int3(0, 1, 0),     // Y+
+            new int3(0, -1, 0)     // Y-
         };
 
+        [NoAlias]
+        [ReadOnly]
+        private static readonly float3[] faceVertices = new float3[]
+        {
+            new float3(-0.5f, -0.5f, -0.5f),
+            new float3(0.5f, -0.5f, -0.5f),
+            new float3(0.5f, 0.5f, -0.5f),
+            new float3(-0.5f, 0.5f, -0.5f),
+            new float3(-0.5f, -0.5f, 0.5f),
+            new float3(0.5f, -0.5f, 0.5f),
+            new float3(0.5f, 0.5f, 0.5f),
+            new float3(-0.5f, 0.5f, 0.5f),
+            new float3(0.5f, -0.5f, -0.5f),
+            new float3(0.5f, -0.5f, 0.5f),
+            new float3(0.5f, 0.5f, 0.5f),
+            new float3(0.5f, 0.5f, -0.5f),
+            new float3(-0.5f, -0.5f, -0.5f),
+            new float3(-0.5f, -0.5f, 0.5f),
+            new float3(-0.5f, 0.5f, 0.5f),
+            new float3(-0.5f, 0.5f, -0.5f),
+            new float3(-0.5f, 0.5f, -0.5f),
+            new float3(0.5f, 0.5f, -0.5f),
+            new float3(0.5f, 0.5f, 0.5f),
+            new float3(-0.5f, 0.5f, 0.5f),
+            new float3(-0.5f, -0.5f, -0.5f),
+            new float3(0.5f, -0.5f, -0.5f),
+            new float3(0.5f, -0.5f, 0.5f),
+            new float3(-0.5f, -0.5f, 0.5f),
+        };
 
 
 
@@ -226,7 +261,7 @@ public struct MeshCalculatorJob
         {
             byte frontFaceVisible, backFaceVisible, leftFaceVisible, rightFaceVisible, topFaceVisible, bottomFaceVisible;
 
-            int3 cubePosition = blockPositions[cubeIndex];
+            int3 cubePosition = blockPositions[cubeIndex];  
 
 
             int3 neighborPositionZPlus = cubePosition + neighborOffsets[0];      // Z+
@@ -348,7 +383,7 @@ public struct MeshCalculatorJob
                 triangles[cTriangleIndex + 29] = cVerticeIndex + 18;
             }
 
-            if (bottomFaceVisible == 1)
+            if (bottomFaceVisible == 1 && cubePosition.y != 0)
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 5] = 1;
 
@@ -454,5 +489,4 @@ public struct MeshCalculatorJob
 
         uvs.Dispose();
     }
-
 }
