@@ -126,7 +126,7 @@ public class MeshCalculator : MonoBehaviour
         stopwatch.Restart();
 
         NativeArray<float2> uvs = new NativeArray<float2>(vertices.Length, Allocator.Persistent);
-        TextureCalculator.ScheduleUVGeneration(uvs, vertices.Length, cubeFacesActiveState, textureIndexs, atlasSize);
+        //TextureCalculator.ScheduleUVGeneration(uvs, vertices.Length, cubeFacesActiveState, textureIndexs, atlasSize);
 
         Vector2[] vectorUvs = new Vector2[vertices.Length];
         for (int i = 0; i < vectorUvs.Length; i++)

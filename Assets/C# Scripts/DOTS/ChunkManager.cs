@@ -34,34 +34,26 @@ public class ChunkManager : MonoBehaviour
 
 
     [Header("")]
-    public int atlasSize;
-
-    public int chunkSize, maxChunkHeight;
-
-
-    public static int staticChunkSize;
+    public int chunkSize;
 
     public int seed;
     public bool reSeedOnStart;
 
+    public int atlasSize;
 
-    public float scale;
-    public int octaves;
-    public float persistence;
-    public float lacunarity;
+    public BiomeSettingsSO bs;
 
     private static NativeHashMap<int3, ChunkData> chunks;
 
 
 
-    private void Start()
+    public void Init()
     {
         if (reSeedOnStart)
         {
             seed = UnityEngine.Random.Range(-100000, 100001);
         }
 
-        staticChunkSize = chunkSize;
 
         Chunk[] chunkArray = FindObjectsOfType<Chunk>();
 
@@ -69,15 +61,13 @@ public class ChunkManager : MonoBehaviour
 
         chunkList.AddRange(chunkArray);
 
-        chunkCount = chunkList.Count;
-
         chunks = new NativeHashMap<int3, ChunkData>(chunkArray.Length, Allocator.Persistent);
 
         StartCoroutine(CallChunks());
     }
 
 
-    public static void AddChunksToQue(Chunk chunk)
+    public void AddChunksToQue(Chunk chunk)
     {
         chunkList.Add(chunk);
     }
@@ -88,49 +78,54 @@ public class ChunkManager : MonoBehaviour
         WaitForSeconds loadWait = new WaitForSeconds(chunkLoadBatchDelay);
         WaitForSeconds renderWait = new WaitForSeconds(chunkRenderBatchDelay);
 
-        chunksLoaded = 0;
-
-        while (chunkCount > chunksLoaded)
+        while (true)
         {
-            for (int i = 0; i < chunkLoadCallsPerFrame; i++)
+            yield return new WaitUntil(() => chunkList.Count > 0);
+
+            chunkCount = chunkList.Count;
+            chunksLoaded = 0;
+
+            while (chunkCount > chunksLoaded)
             {
-                chunkList[chunksLoaded].LoadChunk(chunkSize, maxChunkHeight, seed, scale, octaves, persistence, lacunarity);
+                for (int i = 0; i < chunkLoadCallsPerFrame; i++)
+                {
+                    chunkList[chunksLoaded].LoadChunk(chunkSize, bs.maxChunkHeight, seed, bs.scale, bs.octaves, bs.persistence, bs.lacunarity);
 
+                    chunks.TryAdd(chunkList[chunksLoaded].chunkData.gridPos, chunkList[chunksLoaded].chunkData);
 
-                chunks.TryAdd(chunkList[chunksLoaded].chunkData.gridPos, chunkList[chunksLoaded].chunkData);
+                    chunksLoaded += 1;
 
-                chunksLoaded += 1;
+                    if (chunksLoaded == chunkCount)
+                    {
+                        break;
+                    }
+                }
 
                 if (chunksLoaded == chunkCount)
                 {
                     break;
                 }
+
+                yield return loadWait;
             }
 
-            if (chunksLoaded == chunkCount)
+
+            while (chunkList.Count > 0)
             {
-                break;
-            }
-
-            yield return loadWait;
-        }
-
-
-        while (chunkList.Count > 0)
-        {
-            for (int i = 0; i < chunkRenderCallsPerFrame; i++)
-            {
-                chunkList[0].RenderChunk(atlasSize);
-
-                chunkList.RemoveAt(0);
-
-                if (chunkList.Count == 0)
+                for (int i = 0; i < chunkRenderCallsPerFrame; i++)
                 {
-                    break;
-                }
-            }
+                    chunkList[0].RenderChunk(atlasSize);
 
-            yield return renderWait;
+                    chunkList.RemoveAt(0);
+
+                    if (chunkList.Count == 0)
+                    {
+                        break;
+                    }
+                }
+
+                yield return renderWait;
+            }
         }
     }
 
@@ -215,7 +210,7 @@ public class ChunkManager : MonoBehaviour
 
                 blockPositions = chunkDataLeft.blockPositions_Right,
 
-                dirModifier = new int3(-staticChunkSize, 0, 0),
+                dirModifier = new int3(-Instance.chunkSize, 0, 0),
             };
 
             startIndex += leftAmount;
@@ -233,7 +228,7 @@ public class ChunkManager : MonoBehaviour
 
                 startIndex = startIndex,
 
-                dirModifier = new int3(staticChunkSize, 0, 0),
+                dirModifier = new int3(Instance.chunkSize, 0, 0),
             };
 
             startIndex += rightAmount;
@@ -251,7 +246,7 @@ public class ChunkManager : MonoBehaviour
 
                 startIndex = startIndex,
 
-                dirModifier = new int3(0, 0, -staticChunkSize),
+                dirModifier = new int3(0, 0, -Instance.chunkSize),
             };
 
             startIndex += forwardAmount;
@@ -269,7 +264,7 @@ public class ChunkManager : MonoBehaviour
 
                 startIndex = startIndex,
 
-                dirModifier = new int3(0, 0, staticChunkSize),
+                dirModifier = new int3(0, 0, Instance.chunkSize),
             };
 
             jobHandles.Add(addConnectedChunkEdgesBack.Schedule(backAmount, backAmount, jobHandles.Length == 0 ? default : jobHandles[jobHandles.Length - 1]));

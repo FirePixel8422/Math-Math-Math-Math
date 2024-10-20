@@ -1,4 +1,5 @@
 using Unity.Burst;
+using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -7,9 +8,9 @@ public struct NoiseMap
 {
 
     // Generates the height map based on the given parameters
-    public static float[,] GenerateNoiseMap(int resolution, int seed, float scale, int octaves, float lacunarity, float persistence, int2 offset)
+    public static NativeArray<float> GenerateNoiseMap(int resolution, int seed, float scale, int octaves, float lacunarity, float persistence, int2 offset)
     {
-        float[,] noiseMap = new float[resolution, resolution];
+        NativeArray<float> noiseMap = new NativeArray<float>(resolution * resolution, Allocator.TempJob);
 
         // Generate Perlin noise values
         for (int x = 0; x < resolution; x++)
@@ -17,7 +18,7 @@ public struct NoiseMap
             for (int z = 0; z < resolution; z++)
             {
                 // Calculate Perlin noise height for the current (x, z) position
-                noiseMap[x, z] = CalculatePerlinNoiseHeight(x + offset.x, z + offset.y, resolution, seed, scale, octaves, lacunarity, persistence);
+                noiseMap[x * resolution + z] = CalculatePerlinNoiseHeight(x + offset.x, z + offset.y, resolution, seed, scale, octaves, lacunarity, persistence);
             }
         }
 

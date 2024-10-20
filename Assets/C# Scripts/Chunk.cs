@@ -19,7 +19,12 @@ public class Chunk : MonoBehaviour
     public MeshFilter meshFilter;
     public MeshCollider meshCollider;
 
-    public float[,] noiseMap;
+
+
+    private void Start()
+    {
+        ChunkManager.Instance.AddChunksToQue(this);
+    }
 
 
     [BurstCompile]
@@ -39,16 +44,18 @@ public class Chunk : MonoBehaviour
 
         int3 worldPos = new int3((int)transform.position.x, 0, (int)transform.position.z);
 
-        noiseMap = NoiseMap.GenerateNoiseMap(chunkSize, seed, scale, octaves, persistence, lacunarity, new int2(worldPos.x, worldPos.z));
+        NativeArray<float> noiseMap = NoiseMapJob.GenerateNoiseMap(chunkSize, seed, scale, octaves, persistence, lacunarity, new int2(worldPos.x, worldPos.z));
 
-        GenerateBlockPos(chunkSize, maxChunkHeight, worldPos / chunkSize);
+        GenerateBlockPos(noiseMap, chunkSize, maxChunkHeight, worldPos / chunkSize);
+
+        noiseMap.Dispose();
     }
 
 
 
 
     [BurstCompile]
-    private void GenerateBlockPos(int chunkSize, int maxChunkHeight, int3 gridPos)
+    private void GenerateBlockPos(NativeArray<float> noiseMap, int chunkSize, int maxChunkHeight, int3 gridPos)
     {
         int chunkSize_X_MaxHeight = chunkSize * maxChunkHeight;
 
@@ -64,7 +71,7 @@ public class Chunk : MonoBehaviour
             for (int z = 0; z < chunkSize; z++)
             {
                 // Get height from the noise map (assuming noiseMap is already normalized between 0 and 1)
-                int perlinValue = (int)(noiseMap[x, z] * maxChunkHeight);
+                int perlinValue = (int)(noiseMap[x *chunkSize + z] * maxChunkHeight);
                 int maxY = ClampPerlinValueUnderMax(perlinValue, maxChunkHeight);
 
                 // Add block positions up to the max height
@@ -161,6 +168,7 @@ public class Chunk : MonoBehaviour
 
 
 
+    #region EditorOnly_Debug
 
     public Stopwatch sw;
 
@@ -226,25 +234,6 @@ public class Chunk : MonoBehaviour
         }
         if (drawChunkGizmos)
         {
-            if (blockDebug.Count == 0)
-            {
-                for (int x = 0; x < debugChunkSize; x++)
-                {
-                    for (int z = 0; z < debugChunkSize; z++)
-                    {
-                        // Get height from the noise map (assuming noiseMap is already normalized between 0 and 1)
-                        int perlinValue = Mathf.FloorToInt(noiseMap[x, z] * debugMaxChunkHeight);
-                        int maxY = Mathf.Clamp(perlinValue, 0, debugMaxChunkHeight);
-
-                        // Add block positions up to the max height
-                        for (int y = 0; y < maxY; y++)
-                        {
-                            blockDebug.Add(new int3(x, y, z));
-                        }
-                    }
-                }
-            }
-
             for (int x = 0; x < debugChunkSize; x++)
             {
                 for (int z = 0; z < debugChunkSize; z++)
@@ -264,6 +253,8 @@ public class Chunk : MonoBehaviour
         }
     }
 
+    #endregion
+
 
 
     private void Example()
@@ -278,7 +269,7 @@ public class Chunk : MonoBehaviour
         {
             for (int index = 0; index < arraySize; index++)
             {
-                example2DArray[i * arrayCount + index] = 1;
+                example2DArray[i * arraySize + index] = 1;
             }
         }
 
@@ -289,7 +280,7 @@ public class Chunk : MonoBehaviour
 
 
         //pak waarde 0, 4 van de array
-        float value = example2DArray[arrayCount * indexX + indexY];
+        float value = example2DArray[indexX *arraySize + indexY];
 
 
         example2DArray.Dispose();
