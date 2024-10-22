@@ -36,6 +36,8 @@ public class ChunkManager : MonoBehaviour
     [Header("")]
     public int chunkSize;
 
+    public static int staticChunkSize;
+
     public int seed;
     public bool reSeedOnStart;
 
@@ -45,15 +47,18 @@ public class ChunkManager : MonoBehaviour
 
     private static NativeHashMap<int3, ChunkData> chunks;
 
+    public byte[] cubeActiveState;
+
 
 
     public void Init()
     {
         if (reSeedOnStart)
         {
-            seed = UnityEngine.Random.Range(-100000, 100001);
+            seed = UnityEngine.Random.Range(-1000000, 1000001);
         }
 
+        staticChunkSize = chunkSize;
 
         Chunk[] chunkArray = FindObjectsOfType<Chunk>();
 
@@ -134,11 +139,6 @@ public class ChunkManager : MonoBehaviour
     {
         #region Setup Chunk Neigbour Data
 
-        if (debug)
-        {
-            print(requesterChunkPos);
-        }
-
         int totalAmount = 0;
         int leftAmount = 0, rightAmount = 0, backAmount = 0, forwardAmount = 0;
 
@@ -149,11 +149,6 @@ public class ChunkManager : MonoBehaviour
             //chunk in front retuns its edge at its back to requesterChunk
             forwardAmount = chunkDataFront.blockPositions_Back.Length;
             totalAmount += forwardAmount;
-
-            if (debug)
-            {
-                print(forwardAmount);
-            }
         }
 
         if (chunks.TryGetValue(requesterChunkPos + new int3(1, 0, 0), out chunkDataRight))
@@ -161,11 +156,6 @@ public class ChunkManager : MonoBehaviour
             //chunk at right retuns its edge at its left to requesterChunk
             rightAmount = chunkDataRight.blockPositions_Left.Length;
             totalAmount += rightAmount;
-
-            if (debug)
-            {
-                print(rightAmount);
-            }
         }
 
         if (chunks.TryGetValue(requesterChunkPos + new int3(0, 0, 1), out chunkDataBack))
@@ -173,11 +163,6 @@ public class ChunkManager : MonoBehaviour
             //chunk behind retuns its edge at its front to requesterChunk
             backAmount = chunkDataBack.blockPositions_Forward.Length;
             totalAmount += backAmount;
-
-            if (debug)
-            {
-                print(backAmount);
-            }
         }
 
         if (chunks.TryGetValue(requesterChunkPos + new int3(-1, 0, 0), out chunkDataLeft))
@@ -185,11 +170,6 @@ public class ChunkManager : MonoBehaviour
             //chunk at left retuns its edge at its right to requesterChunk
             leftAmount = chunkDataLeft.blockPositions_Right.Length;
             totalAmount += leftAmount;
-
-            if (debug)
-            {
-                print(leftAmount);
-            }
         }
 
         #endregion
@@ -202,7 +182,7 @@ public class ChunkManager : MonoBehaviour
         NativeList<JobHandle> jobHandles = new NativeList<JobHandle>(4, Allocator.TempJob);
         int startIndex = 0;
 
-        if(leftAmount != 0)
+        if (leftAmount != 0)
         {
             AddConnectedChunkEdge addConnectedChunkEdgesLeft = new AddConnectedChunkEdge()
             {
@@ -211,6 +191,8 @@ public class ChunkManager : MonoBehaviour
                 blockPositions = chunkDataLeft.blockPositions_Right,
 
                 dirModifier = new int3(-Instance.chunkSize, 0, 0),
+
+                chunkSize = staticChunkSize,
             };
 
             startIndex += leftAmount;
@@ -229,6 +211,8 @@ public class ChunkManager : MonoBehaviour
                 startIndex = startIndex,
 
                 dirModifier = new int3(Instance.chunkSize, 0, 0),
+
+                chunkSize = staticChunkSize,
             };
 
             startIndex += rightAmount;
@@ -247,6 +231,8 @@ public class ChunkManager : MonoBehaviour
                 startIndex = startIndex,
 
                 dirModifier = new int3(0, 0, -Instance.chunkSize),
+
+                chunkSize = staticChunkSize,
             };
 
             startIndex += forwardAmount;
@@ -265,6 +251,8 @@ public class ChunkManager : MonoBehaviour
                 startIndex = startIndex,
 
                 dirModifier = new int3(0, 0, Instance.chunkSize),
+
+                chunkSize = staticChunkSize,
             };
 
             jobHandles.Add(addConnectedChunkEdgesBack.Schedule(backAmount, backAmount, jobHandles.Length == 0 ? default : jobHandles[jobHandles.Length - 1]));
@@ -273,6 +261,8 @@ public class ChunkManager : MonoBehaviour
 
         JobHandle.CompleteAll(jobHandles.AsArray());
 
+
+#if UNITY_EDITOR
         if (debug)
         {
             Instance.debugBlockPositions = new int3[connectedChunkEdgePositions.Length];
@@ -282,6 +272,7 @@ public class ChunkManager : MonoBehaviour
                 Instance.debugBlockPositions[i] = connectedChunkEdgePositions[i];
             }
         }
+#endif
 
         return connectedChunkEdgePositions;
     }
@@ -299,16 +290,19 @@ public class ChunkManager : MonoBehaviour
 
         [NoAlias][ReadOnly] public int3 dirModifier;
 
+        [NoAlias][ReadOnly] public int chunkSize;
+
 
         [BurstCompile]
         public void Execute(int index)
         {
-            connectedChunkEdgePositions[startIndex + index] = blockPositions[index] + dirModifier - new int3(16, 0, 16);
+            connectedChunkEdgePositions[startIndex + index] = blockPositions[index] + dirModifier - new int3(chunkSize, 0, chunkSize);
         }
     }
 
 
 
+#if UNITY_EDITOR
     public int3[] debugBlockPositions;
     public Vector3 offset;
 
@@ -324,5 +318,5 @@ public class ChunkManager : MonoBehaviour
             Gizmos.DrawWireCube(new Vector3(debugBlockPositions[i].x, debugBlockPositions[i].y, debugBlockPositions[i].z) + offset, Vector3.one);
         }
     }
-
+#endif
 }

@@ -1,11 +1,14 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
+using System.Threading;
 using Unity.Burst;
+using Unity.Burst.CompilerServices;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Mathematics;
+using Unity.VisualScripting;
 using UnityEngine;
 
 
@@ -14,27 +17,12 @@ public struct MeshCalculatorJob
 {
     public static void CallGenerateMeshJob(int3 chunkGridPos, NativeArray<int3> blockPositions, int atlasSize, Mesh mesh, MeshCollider coll, bool debugMode = false)
     {
-        #region Main Data NativeContainers
-
         JobHandle mainJobHandle;
-
 
         int blockPositionsLength = blockPositions.Length;
 
         NativeHashMap<int3, bool> blockPositionsMap = new NativeHashMap<int3, bool>(blockPositionsLength, Allocator.TempJob);
 
-
-        NativeArray<float3> vertices = new NativeArray<float3>(blockPositionsLength * 24, Allocator.TempJob);
-
-        NativeArray<int> triangles = new NativeArray<int>(blockPositionsLength * 36, Allocator.TempJob);
-
-
-        NativeArray<int> textureIndexs = new NativeArray<int>(blockPositionsLength, Allocator.TempJob);
-
-
-        NativeArray<byte> cubeFacesActiveState = new NativeArray<byte>(blockPositionsLength * 6, Allocator.TempJob);
-
-        #endregion
 
 
 
@@ -44,7 +32,6 @@ public struct MeshCalculatorJob
         {
             blockPositions = blockPositions,
             blockPositionsMap = blockPositionsMap,
-            triangles = triangles,
         };
 
         mainJobHandle = setupDataJobParallel.Schedule(blockPositionsLength, blockPositionsLength);
@@ -73,51 +60,59 @@ public struct MeshCalculatorJob
 
         #region GenerateMeshCubes Job
 
-        GenerateMeshCubesJobParallel generateMeshCubesJob = new GenerateMeshCubesJobParallel
+        NativeArray<float3> vertices = new NativeArray<float3>(blockPositionsLength * 8, Allocator.TempJob);
+        NativeReference<int> calcVertexCount = new NativeReference<int>(Allocator.TempJob);
+
+        NativeArray<int> triangles = new NativeArray<int>(blockPositionsLength * 36, Allocator.TempJob);
+        NativeReference<int> calcTriangleCount = new NativeReference<int>(Allocator.TempJob);
+
+
+        NativeArray<int> textureIndexs = new NativeArray<int>(blockPositionsLength, Allocator.TempJob);
+
+        NativeArray<byte> cubeFacesActiveState = new NativeArray<byte>(blockPositionsLength * 6, Allocator.TempJob);
+
+
+        GenerateMeshCubesJobParallel_TESTING8VERTS generateMeshCubesJob = new GenerateMeshCubesJobParallel_TESTING8VERTS
         {
             blockPositions = blockPositions,
             blockPositionsMap = blockPositionsMap,
 
             vertices = vertices,
+            calcVertexCount = calcVertexCount,
 
             triangles = triangles,
+            calcTriangleCount = calcTriangleCount,
 
             cubeFacesActiveState = cubeFacesActiveState,
         };
 
         mainJobHandle = generateMeshCubesJob.Schedule(blockPositionsLength, blockPositionsLength, mainJobHandle);
-
-        #endregion
-
-
-
-
-        #region FinalizeMesh Job
-
-        NativeList<float3> filteredVertices = new NativeList<float3>(vertices.Length, Allocator.TempJob);
-
-        NativeList<int> filteredTriangles = new NativeList<int>(triangles.Length, Allocator.TempJob);
-
-        FinalizeMeshMathJob finalizeMeshMathJob = new FinalizeMeshMathJob
-        {
-            vertices = vertices,
-            triangles = triangles,
-            filteredVertices = filteredVertices,
-            filteredTriangles = filteredTriangles,
-        };
-
-        mainJobHandle = finalizeMeshMathJob.Schedule(mainJobHandle);
         mainJobHandle.Complete();
 
-        //UnityEngine.Debug.Log(blockPositions.Length + "blocks");
-        //UnityEngine.Debug.Log(blockPositionsMap.Count + "blocks in map");
-
         #endregion
 
 
+
+
+        #region Filter Vertices, Triangles and Normals, then apply call ApplyMeshToObject
+
+        NativeArray<float3> filteredVertices = new NativeArray<float3>(calcVertexCount.Value, Allocator.Temp);
+        NativeArray<int> filteredTriangles = new NativeArray<int>(calcTriangleCount.Value, Allocator.Temp);
+
+
+        NativeArray<float3>.Copy(vertices, filteredVertices, calcVertexCount.Value);
+        NativeArray<int>.Copy(triangles, filteredTriangles, calcTriangleCount.Value);
+
+        vertices.Dispose();
+        triangles.Dispose();
+
+        calcVertexCount.Dispose();
+        calcTriangleCount.Dispose();
 
 
         ApplyMeshToObject(filteredVertices, filteredTriangles, cubeFacesActiveState, textureIndexs, atlasSize, mesh, coll);
+
+        #endregion
 
 
 
@@ -127,23 +122,16 @@ public struct MeshCalculatorJob
         blockPositions.Dispose();
         blockPositionsMap.Dispose();
 
-        vertices.Dispose();
-
-        triangles.Dispose();
-
-
         textureIndexs.Dispose();
 
         cubeFacesActiveState.Dispose();
 
         filteredVertices.Dispose();
-
-        filteredTriangles.Dispose();
+        filteredTriangles.Dispose(); 
 
         connectedChunkEdgePositions.Dispose();
 
         #endregion
-
     }
 
 
@@ -159,18 +147,26 @@ public struct MeshCalculatorJob
         [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeHashMap<int3, bool> blockPositionsMap;
 
-        [NativeDisableParallelForRestriction]
-        [NoAlias][WriteOnly] public NativeArray<int> triangles;
+        //[NativeDisableParallelForRestriction]
+        //[NoAlias][WriteOnly] public NativeArray<float3> vertices;
+
+        //[NativeDisableParallelForRestriction]
+        //[NoAlias][WriteOnly] public NativeArray<int> triangles;
 
         public void Execute(int index)
         {
             int3 gridPosition = blockPositions[index];
             blockPositionsMap.TryAdd(gridPosition, false);
 
-            for (int i = 0; i < 36; i++)
-            {
-                triangles[index * 36 + i] = -1;
-            }
+            //for (int i = 0; i < 8; i++)
+            //{
+            //    vertices[index * 8 + i] = new float3(-0.1f, 0, 0);
+            //}
+
+            //for (int i = 0; i < 36; i++)
+            //{
+            //    triangles[index * 36 + i] = -1;
+            //}
         }
     }
 
@@ -193,9 +189,8 @@ public struct MeshCalculatorJob
 
 
 
-
     [BurstCompile]
-    private struct GenerateMeshCubesJobParallel : IJobParallelFor
+    private struct GenerateMeshCubesJobParallel_TESTING8VERTS : IJobParallelFor
     {
         [NoAlias][ReadOnly] public NativeArray<int3> blockPositions;
 
@@ -204,7 +199,6 @@ public struct MeshCalculatorJob
         [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeArray<float3> vertices;
 
-
         [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeArray<int> triangles;
 
@@ -212,9 +206,16 @@ public struct MeshCalculatorJob
         [NoAlias][WriteOnly] public NativeArray<byte> cubeFacesActiveState;
 
 
+        [NativeDisableParallelForRestriction]
+        [NoAlias][WriteOnly] public NativeReference<int> calcVertexCount;
+
+        [NativeDisableParallelForRestriction]
+        [NoAlias][WriteOnly] public NativeReference<int> calcTriangleCount;
+
+
         [NoAlias]
         [ReadOnly]
-        private static readonly int3[] neighborOffsets = new int3[]
+        private static readonly int3[] neighborOffsetsAndNormals = new int3[]
         {
             new int3(0, 0, 1),     // Z+
             new int3(0, 0, -1),    // Z-
@@ -226,34 +227,20 @@ public struct MeshCalculatorJob
 
         [NoAlias]
         [ReadOnly]
-        private static readonly float3[] faceVertices = new float3[]
+        private static readonly float3[] cubeVertices = new float3[]
         {
-            new float3(-0.5f, -0.5f, -0.5f),
-            new float3(0.5f, -0.5f, -0.5f),
-            new float3(0.5f, 0.5f, -0.5f),
-            new float3(-0.5f, 0.5f, -0.5f),
-            new float3(-0.5f, -0.5f, 0.5f),
-            new float3(0.5f, -0.5f, 0.5f),
-            new float3(0.5f, 0.5f, 0.5f),
-            new float3(-0.5f, 0.5f, 0.5f),
-            new float3(0.5f, -0.5f, -0.5f),
-            new float3(0.5f, -0.5f, 0.5f),
-            new float3(0.5f, 0.5f, 0.5f),
-            new float3(0.5f, 0.5f, -0.5f),
-            new float3(-0.5f, -0.5f, -0.5f),
-            new float3(-0.5f, -0.5f, 0.5f),
-            new float3(-0.5f, 0.5f, 0.5f),
-            new float3(-0.5f, 0.5f, -0.5f),
-            new float3(-0.5f, 0.5f, -0.5f),
-            new float3(0.5f, 0.5f, -0.5f),
-            new float3(0.5f, 0.5f, 0.5f),
-            new float3(-0.5f, 0.5f, 0.5f),
-            new float3(-0.5f, -0.5f, -0.5f),
-            new float3(0.5f, -0.5f, -0.5f),
-            new float3(0.5f, -0.5f, 0.5f),
-            new float3(-0.5f, -0.5f, 0.5f),
+            new float3(-0.5f, -0.5f, -0.5f), // Vertex 0
+            new float3( 0.5f, -0.5f, -0.5f), // Vertex 1
+            new float3( 0.5f,  0.5f, -0.5f), // Vertex 2
+            new float3(-0.5f,  0.5f, -0.5f), // Vertex 3
+            new float3(-0.5f, -0.5f,  0.5f), // Vertex 4
+            new float3( 0.5f, -0.5f,  0.5f), // Vertex 5
+            new float3( 0.5f,  0.5f,  0.5f), // Vertex 6
+            new float3(-0.5f,  0.5f,  0.5f)  // Vertex 7
         };
 
+        [NoAlias] private int cVertexIndex;
+        [NoAlias] private int cTriangleIndex;
 
 
         [BurstCompile]
@@ -261,17 +248,14 @@ public struct MeshCalculatorJob
         {
             byte frontFaceVisible, backFaceVisible, leftFaceVisible, rightFaceVisible, topFaceVisible, bottomFaceVisible;
 
-            int3 cubePosition = blockPositions[cubeIndex];  
+            int3 cubePosition = blockPositions[cubeIndex];
 
-
-            int3 neighborPositionZPlus = cubePosition + neighborOffsets[0];      // Z+
-            int3 neighborPositionZMinus = cubePosition + neighborOffsets[1];    // Z-
-            int3 neighborPositionXMinus = cubePosition + neighborOffsets[2];    // X-
-            int3 neighborPositionXPlus = cubePosition + neighborOffsets[3];      // X+
-            int3 neighborPositionYPlus = cubePosition + neighborOffsets[4];      // Y+
-            int3 neighborPositionYMinus = cubePosition + neighborOffsets[5];    // Y-
-
-
+            int3 neighborPositionZPlus = cubePosition + neighborOffsetsAndNormals[0];      // Z+
+            int3 neighborPositionZMinus = cubePosition + neighborOffsetsAndNormals[1];    // Z-
+            int3 neighborPositionXMinus = cubePosition + neighborOffsetsAndNormals[2];    // X-
+            int3 neighborPositionXPlus = cubePosition + neighborOffsetsAndNormals[3];     // X+
+            int3 neighborPositionYPlus = cubePosition + neighborOffsetsAndNormals[4];     // Y+
+            int3 neighborPositionYMinus = cubePosition + neighborOffsetsAndNormals[5];    // Y-
 
             // Use the NativeHashMap to check neighbor visibility
             frontFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionZPlus) ? 0 : 1);
@@ -282,187 +266,219 @@ public struct MeshCalculatorJob
             bottomFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionYMinus) ? 0 : 1);
 
 
-            if (frontFaceVisible == 0 && backFaceVisible == 0 && leftFaceVisible == 0 && rightFaceVisible == 0 && bottomFaceVisible == 0 && topFaceVisible == 0) 
+            if (frontFaceVisible == 0 && backFaceVisible == 0 && leftFaceVisible == 0 && rightFaceVisible == 0 && bottomFaceVisible == 0 && topFaceVisible == 0)
             {
-                //if there will be no faces for this cube
-                return; // Skip this cube entirely
+                // Skip this cube entirely if no faces are visible
+
+                if (cubeIndex == (blockPositions.Length - 1))
+                {
+                    FinilizeJobData();
+                }
+                return;
             }
 
 
+            int addedTriangles = 0;
+
+            int4 xyzw = new int4();
+            int4 xyzw_Minus = new int4();
 
 
-            int cCubeActiveStateIndex = cubeIndex * 6;
-            int cVerticeIndex = cubeIndex * 24;
-            int cTriangleIndex = cubeIndex * 36;
+            int cCubeActiveStateIndex = cubeIndex * 6; // 6 faces for each cube
 
 
             #region Add face vertices and triangles if the face is visible
 
+            // Back face
             if (backFaceVisible == 1)
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 0] = 1;
 
-                vertices[cVerticeIndex + 0] = faceVertices[0] + cubePosition;
-                vertices[cVerticeIndex + 1] = faceVertices[1] + cubePosition;
-                vertices[cVerticeIndex + 2] = faceVertices[2] + cubePosition;
-                vertices[cVerticeIndex + 3] = faceVertices[3] + cubePosition;
+                vertices[cVertexIndex + 0] = cubeVertices[0] + cubePosition; // Vertex 4
+                vertices[cVertexIndex + 2] = cubeVertices[2] + cubePosition; // Vertex 5
+                vertices[cVertexIndex + 1] = cubeVertices[1] + cubePosition; // Vertex 6
+                vertices[cVertexIndex + 3] = cubeVertices[3] + cubePosition; // Vertex 7
 
-                triangles[cTriangleIndex + 0] = cVerticeIndex + 2;
-                triangles[cTriangleIndex + 1] = cVerticeIndex + 1;
-                triangles[cTriangleIndex + 2] = cVerticeIndex + 0;
-                triangles[cTriangleIndex + 3] = cVerticeIndex + 3;
-                triangles[cTriangleIndex + 4] = cVerticeIndex + 2;
-                triangles[cTriangleIndex + 5] = cVerticeIndex + 0;
+                xyzw.x = 1;
+                xyzw.y = 1;
+                xyzw.z = 1;
+                xyzw.w = 1;
+
+                // Add triangles for the back face
+                triangles[cTriangleIndex + 0] = cVertexIndex + 0;
+                triangles[cTriangleIndex + 1] = cVertexIndex + 2;
+                triangles[cTriangleIndex + 2] = cVertexIndex + 1;
+                triangles[cTriangleIndex + 3] = cVertexIndex + 0;
+                triangles[cTriangleIndex + 4] = cVertexIndex + 3;
+                triangles[cTriangleIndex + 5] = cVertexIndex + 2;
+
+                addedTriangles += 6;
             }
 
+            // Front face
             if (frontFaceVisible == 1)
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 1] = 1;
 
-                vertices[cVerticeIndex + 4] = faceVertices[4] + cubePosition;
-                vertices[cVerticeIndex + 5] = faceVertices[5] + cubePosition;
-                vertices[cVerticeIndex + 6] = faceVertices[6] + cubePosition;
-                vertices[cVerticeIndex + 7] = faceVertices[7] + cubePosition;
 
-                triangles[cTriangleIndex + 6] = cVerticeIndex + 5;
-                triangles[cTriangleIndex + 7] = cVerticeIndex + 6;
-                triangles[cTriangleIndex + 8] = cVerticeIndex + 4;
-                triangles[cTriangleIndex + 9] = cVerticeIndex + 6;
-                triangles[cTriangleIndex + 10] = cVerticeIndex + 7;
-                triangles[cTriangleIndex + 11] = cVerticeIndex + 4;
+                vertices[cVertexIndex + 4] = cubeVertices[4] + cubePosition; // Vertex 0
+                vertices[cVertexIndex + 5] = cubeVertices[5] + cubePosition; // Vertex 1
+                vertices[cVertexIndex + 6] = cubeVertices[6] + cubePosition; // Vertex 2
+                vertices[cVertexIndex + 7] = cubeVertices[7] + cubePosition; // Vertex 3
+
+                xyzw_Minus.x = 1;
+                xyzw_Minus.y = 1;
+                xyzw_Minus.z = 1;
+                xyzw_Minus.w = 1;
+
+                // Add triangles for the front face
+                triangles[cTriangleIndex + addedTriangles + 0] = cVertexIndex + 4;
+                triangles[cTriangleIndex + addedTriangles + 1] = cVertexIndex + 5;
+                triangles[cTriangleIndex + addedTriangles + 2] = cVertexIndex + 6;
+                triangles[cTriangleIndex + addedTriangles + 3] = cVertexIndex + 4;
+                triangles[cTriangleIndex + addedTriangles + 4] = cVertexIndex + 6;
+                triangles[cTriangleIndex + addedTriangles + 5] = cVertexIndex + 7;
+
+                addedTriangles += 6;
             }
 
+            // Right face
             if (rightFaceVisible == 1)
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 2] = 1;
 
-                vertices[cVerticeIndex + 8] = faceVertices[8] + cubePosition;
-                vertices[cVerticeIndex + 9] = faceVertices[9] + cubePosition;
-                vertices[cVerticeIndex + 10] = faceVertices[10] + cubePosition;
-                vertices[cVerticeIndex + 11] = faceVertices[11] + cubePosition;
 
-                triangles[cTriangleIndex + 12] = cVerticeIndex + 10;
-                triangles[cTriangleIndex + 13] = cVerticeIndex + 9;
-                triangles[cTriangleIndex + 14] = cVerticeIndex + 8;
-                triangles[cTriangleIndex + 15] = cVerticeIndex + 11;
-                triangles[cTriangleIndex + 16] = cVerticeIndex + 10;
-                triangles[cTriangleIndex + 17] = cVerticeIndex + 8;
+                vertices[cVertexIndex + 1] = cubeVertices[1] + cubePosition; // Vertex 1
+                vertices[cVertexIndex + 6] = cubeVertices[6] + cubePosition; // Vertex 5
+                vertices[cVertexIndex + 2] = cubeVertices[2] + cubePosition; // Vertex 6
+                vertices[cVertexIndex + 5] = cubeVertices[5] + cubePosition; // Vertex 2
+
+                xyzw.y = 1;
+                xyzw.z = 1;
+                xyzw_Minus.y = 1;
+                xyzw_Minus.z = 1;
+
+                // Add triangles for the right face
+                triangles[cTriangleIndex + addedTriangles + 0] = cVertexIndex + 1;
+                triangles[cTriangleIndex + addedTriangles + 1] = cVertexIndex + 2;
+                triangles[cTriangleIndex + addedTriangles + 2] = cVertexIndex + 6;
+                triangles[cTriangleIndex + addedTriangles + 3] = cVertexIndex + 1;
+                triangles[cTriangleIndex + addedTriangles + 4] = cVertexIndex + 6;
+                triangles[cTriangleIndex + addedTriangles + 5] = cVertexIndex + 5;
+
+                addedTriangles += 6;
             }
 
+            // Left face
             if (leftFaceVisible == 1)
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 3] = 1;
 
-                vertices[cVerticeIndex + 12] = faceVertices[12] + cubePosition;
-                vertices[cVerticeIndex + 13] = faceVertices[13] + cubePosition;
-                vertices[cVerticeIndex + 14] = faceVertices[14] + cubePosition;
-                vertices[cVerticeIndex + 15] = faceVertices[15] + cubePosition;
 
-                triangles[cTriangleIndex + 18] = cVerticeIndex + 13;
-                triangles[cTriangleIndex + 19] = cVerticeIndex + 14;
-                triangles[cTriangleIndex + 20] = cVerticeIndex + 12;
-                triangles[cTriangleIndex + 21] = cVerticeIndex + 14;
-                triangles[cTriangleIndex + 22] = cVerticeIndex + 15;
-                triangles[cTriangleIndex + 23] = cVerticeIndex + 12;
+                vertices[cVertexIndex + 0] = cubeVertices[0] + cubePosition; // Vertex 0
+                vertices[cVertexIndex + 7] = cubeVertices[7] + cubePosition; // Vertex 4
+                vertices[cVertexIndex + 4] = cubeVertices[4] + cubePosition; // Vertex 7
+                vertices[cVertexIndex + 3] = cubeVertices[3] + cubePosition; // Vertex 3
+
+                xyzw.x = 1;
+                xyzw_Minus.w = 1;
+                xyzw_Minus.x = 1;
+                xyzw.z = 1;
+
+                // Add triangles for the left face
+                triangles[cTriangleIndex + addedTriangles + 0] = cVertexIndex + 0;
+                triangles[cTriangleIndex + addedTriangles + 1] = cVertexIndex + 4;
+                triangles[cTriangleIndex + addedTriangles + 2] = cVertexIndex + 7;
+                triangles[cTriangleIndex + addedTriangles + 3] = cVertexIndex + 0;
+                triangles[cTriangleIndex + addedTriangles + 4] = cVertexIndex + 7;
+                triangles[cTriangleIndex + addedTriangles + 5] = cVertexIndex + 3;
+
+                addedTriangles += 6;
             }
 
+            // Top face
             if (topFaceVisible == 1)
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 4] = 1;
 
-                vertices[cVerticeIndex + 16] = faceVertices[16] + cubePosition;
-                vertices[cVerticeIndex + 17] = faceVertices[17] + cubePosition;
-                vertices[cVerticeIndex + 18] = faceVertices[18] + cubePosition;
-                vertices[cVerticeIndex + 19] = faceVertices[19] + cubePosition;
 
-                triangles[cTriangleIndex + 24] = cVerticeIndex + 16;
-                triangles[cTriangleIndex + 25] = cVerticeIndex + 18;
-                triangles[cTriangleIndex + 26] = cVerticeIndex + 17;
-                triangles[cTriangleIndex + 27] = cVerticeIndex + 16;
-                triangles[cTriangleIndex + 28] = cVerticeIndex + 19;
-                triangles[cTriangleIndex + 29] = cVerticeIndex + 18;
+                vertices[cVertexIndex + 3] = cubeVertices[3] + cubePosition; // Vertex 4
+                vertices[cVertexIndex + 6] = cubeVertices[6] + cubePosition; // Vertex 5
+                vertices[cVertexIndex + 2] = cubeVertices[2] + cubePosition; // Vertex 6
+                vertices[cVertexIndex + 7] = cubeVertices[7] + cubePosition; // Vertex 7
+
+
+                xyzw.w = 1;
+                xyzw_Minus.z = 1;
+                xyzw.z = 1;
+                xyzw_Minus.w = 1;
+
+                // Add triangles for the top face
+                triangles[cTriangleIndex + addedTriangles + 0] = cVertexIndex + 3;
+                triangles[cTriangleIndex + addedTriangles + 1] = cVertexIndex + 6;
+                triangles[cTriangleIndex + addedTriangles + 2] = cVertexIndex + 2;
+                triangles[cTriangleIndex + addedTriangles + 3] = cVertexIndex + 3;
+                triangles[cTriangleIndex + addedTriangles + 4] = cVertexIndex + 7;
+                triangles[cTriangleIndex + addedTriangles + 5] = cVertexIndex + 6;
+
+                addedTriangles += 6;
             }
 
+            // Bottom face
             if (bottomFaceVisible == 1 && cubePosition.y != 0)
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 5] = 1;
 
-                vertices[cVerticeIndex + 20] = faceVertices[20] + cubePosition;
-                vertices[cVerticeIndex + 21] = faceVertices[21] + cubePosition;
-                vertices[cVerticeIndex + 22] = faceVertices[22] + cubePosition;
-                vertices[cVerticeIndex + 23] = faceVertices[23] + cubePosition;
 
-                triangles[cTriangleIndex + 30] = cVerticeIndex + 20;
-                triangles[cTriangleIndex + 31] = cVerticeIndex + 21;
-                triangles[cTriangleIndex + 32] = cVerticeIndex + 22;
-                triangles[cTriangleIndex + 33] = cVerticeIndex + 20;
-                triangles[cTriangleIndex + 34] = cVerticeIndex + 22;
-                triangles[cTriangleIndex + 35] = cVerticeIndex + 23;
+                vertices[cVertexIndex + 0] = cubeVertices[0] + cubePosition; // Vertex 0
+                vertices[cVertexIndex + 5] = cubeVertices[5] + cubePosition; // Vertex 1
+                vertices[cVertexIndex + 1] = cubeVertices[1] + cubePosition; // Vertex 2
+                vertices[cVertexIndex + 4] = cubeVertices[4] + cubePosition; // Vertex 3
+
+                xyzw.x = 1;
+                xyzw_Minus.y = 1;
+                xyzw.y = 1;
+                xyzw_Minus.x = 1;
+
+                // Add triangles for the bottom face
+                triangles[cTriangleIndex + addedTriangles + 0] = cVertexIndex + 0;
+                triangles[cTriangleIndex + addedTriangles + 1] = cVertexIndex + 5;
+                triangles[cTriangleIndex + addedTriangles + 2] = cVertexIndex + 1;
+                triangles[cTriangleIndex + addedTriangles + 3] = cVertexIndex + 0;
+                triangles[cTriangleIndex + addedTriangles + 4] = cVertexIndex + 4;
+                triangles[cTriangleIndex + addedTriangles + 5] = cVertexIndex + 5;
+
+                addedTriangles += 6;
             }
+
             #endregion
-        }
-    }
+
+            Interlocked.Add(ref cVertexIndex, 8);//xyzw.x + xyzw.y + xyzw.z + xyzw.w + xyzw_Minus.x + xyzw_Minus.y + xyzw_Minus.z + xyzw_Minus.w); 
+
+            Interlocked.Add(ref cTriangleIndex, addedTriangles);
 
 
-
-
-    [BurstCompile]
-    private struct FinalizeMeshMathJob : IJob
-    {
-        [NoAlias][ReadOnly] public NativeArray<float3> vertices;
-        [NoAlias][ReadOnly] public NativeArray<int> triangles;
-
-        [NoAlias][WriteOnly] public NativeList<float3> filteredVertices;
-        [NoAlias][WriteOnly] public NativeList<int> filteredTriangles;
-
-        public void Execute()
-        {
-            // Counter for tracking the current position in the filtered vertices
-            int currentVertexIndex = 0;
-            int skippedVerticesCount = 0;
-
-            int triangleCount = triangles.Length;
-
-            // Iterate through the triangles in steps of 6 (since it's quad-based with 6 triangle indices)
-            for (int triangleIndex = 0; triangleIndex < triangleCount; triangleIndex += 6)
+            if (cubeIndex == (blockPositions.Length - 1))
             {
-                // Check the first triangle of the quad, if it's -1, skip this entire quad
-                if (triangles[triangleIndex] == -1)
-                {
-                    // Skip the corresponding 4 vertices as well
-                    currentVertexIndex += 4;
-                    skippedVerticesCount += 4;
-                    continue; // Skip this quad
-                }
-
-                // Add the 4 vertices corresponding to the current quad
-                filteredVertices.Add(vertices[currentVertexIndex + 0]);
-                filteredVertices.Add(vertices[currentVertexIndex + 1]);
-                filteredVertices.Add(vertices[currentVertexIndex + 2]);
-                filteredVertices.Add(vertices[currentVertexIndex + 3]);
-
-                // Add the 6 triangles, adjusting indices relative to the new vertex list
-                filteredTriangles.Add(triangles[triangleIndex + 0] - skippedVerticesCount);
-                filteredTriangles.Add(triangles[triangleIndex + 1] - skippedVerticesCount);
-                filteredTriangles.Add(triangles[triangleIndex + 2] - skippedVerticesCount);
-                filteredTriangles.Add(triangles[triangleIndex + 3] - skippedVerticesCount);
-                filteredTriangles.Add(triangles[triangleIndex + 4] - skippedVerticesCount);
-                filteredTriangles.Add(triangles[triangleIndex + 5] - skippedVerticesCount);
-
-                // After processing a valid quad, move to the next set of 4 vertices
-                currentVertexIndex += 4;
+                FinilizeJobData();
             }
         }
+
+
+        private void FinilizeJobData()
+        {
+            calcVertexCount.Value = blockPositions.Length * 8;
+            calcTriangleCount.Value = cTriangleIndex;
+        }
     }
 
 
 
 
-    private static void ApplyMeshToObject(NativeList<float3> vertices, NativeList<int> triangles, NativeArray<byte> cubeFacesActiveState, NativeArray<int> textureIndexs, int atlasSize, Mesh mesh, MeshCollider coll)
+    private static void ApplyMeshToObject(NativeArray<float3> vertices, NativeArray<int> triangles, NativeArray<byte> cubeFacesActiveState, NativeArray<int> textureIndexs, int atlasSize, Mesh mesh, MeshCollider coll)
     {
-        NativeArray<float2> uvs = new NativeArray<float2>(vertices.Length, Allocator.Persistent);
-        TextureCalculator.ScheduleUVGeneration(uvs, vertices.Length, cubeFacesActiveState, textureIndexs, atlasSize);
-
+        NativeArray<float2> uvs = new NativeArray<float2>(vertices.Length, Allocator.TempJob);
+        TextureCalculator.ScheduleUVGeneration(uvs, cubeFacesActiveState, textureIndexs, atlasSize);
 
 
         if (vertices.Length > 65535)
@@ -470,23 +486,22 @@ public struct MeshCalculatorJob
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         }
 
-        Vector3[] verticesVectors = new Vector3[vertices.Length];
-
-        for (int i = 0; i < verticesVectors.Length; i++)
-        {
-            verticesVectors[i] = new Vector3(vertices[i].x, vertices[i].y, vertices[i].z);
-        }
-
-        mesh.vertices = vertices.AsArray().Reinterpret<Vector3>().ToArray();
-        mesh.triangles = triangles.AsArray().ToArray();
+        mesh.vertices = vertices.Reinterpret<Vector3>().ToArray();
+        mesh.triangles = triangles.ToArray();
 
         mesh.uv = uvs.Reinterpret<Vector2>().ToArray();
 
-        mesh.RecalculateNormals();
+        mesh.normals = new Vector3[vertices.Length];
+
         mesh.RecalculateBounds();
+
+        MeshExtensions.RecalculateNormals(mesh, 0);
+
+        mesh.Optimize();
 
         coll.sharedMesh = mesh;
 
         uvs.Dispose();
     }
+
 }

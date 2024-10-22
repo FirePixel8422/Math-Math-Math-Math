@@ -31,16 +31,14 @@ public class PlayerMovement : MonoBehaviour {
         rb.freezeRotation = true;
     }
 
-    private void FixedUpdate()
+    
+
+    private void Update()
     {
         if (canMove)
         {
             MovePlayer();
         }
-    }
-
-    private void Update()
-    {
         MyInput();
         SpeedControl();
 
@@ -58,8 +56,8 @@ public class PlayerMovement : MonoBehaviour {
 
     private void MyInput()
     {
-        horizontalInput = Input.GetAxis("Horizontal");
-        verticalInput = Input.GetAxis("Vertical");
+        horizontalInput = Input.GetAxisRaw("Horizontal");
+        verticalInput = Input.GetAxisRaw("Vertical");
 
         if (Input.GetButtonDown("Jump") && onGround && canMove)
         {

@@ -4,6 +4,7 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Mathematics;
 using System.Diagnostics;
+using Unity.Transforms;
 
 
 
@@ -46,7 +47,7 @@ public class Chunk : MonoBehaviour
 
         NativeArray<float> noiseMap = NoiseMapJob.GenerateNoiseMap(chunkSize, seed, scale, octaves, persistence, lacunarity, new int2(worldPos.x, worldPos.z));
 
-        GenerateBlockPos(noiseMap, chunkSize, maxChunkHeight, worldPos / chunkSize);
+        GenerateBlockPos(noiseMap, chunkSize, maxChunkHeight, (worldPos - new int3((int)(chunkSize * 0.5f), 0, (int)(chunkSize * 0.5f))) / chunkSize);
 
         noiseMap.Dispose();
     }
@@ -71,7 +72,7 @@ public class Chunk : MonoBehaviour
             for (int z = 0; z < chunkSize; z++)
             {
                 // Get height from the noise map (assuming noiseMap is already normalized between 0 and 1)
-                int perlinValue = (int)(noiseMap[x *chunkSize + z] * maxChunkHeight);
+                int perlinValue = (int)(noiseMap[x * chunkSize + z] * maxChunkHeight);
                 int maxY = ClampPerlinValueUnderMax(perlinValue, maxChunkHeight);
 
                 // Add block positions up to the max height
@@ -127,14 +128,6 @@ public class Chunk : MonoBehaviour
         NativeArray<int3>.Copy(blockPositionsList_Back.AsArray(), chunkData.blockPositions_Back);
 
 
-        if (debugMode)
-        {
-            print(chunkData.blockPositions_Left.Length);
-            print(chunkData.blockPositions_Right.Length);
-            print(chunkData.blockPositions_Forward.Length);
-            print(chunkData.blockPositions_Back.Length);
-        }
-
         blockPositionsList.Dispose();
 
         blockPositionsList_Left.Dispose();
@@ -172,23 +165,11 @@ public class Chunk : MonoBehaviour
 
     public Stopwatch sw;
 
-    private Vector3[] debugVerts;
-    private int[] debugTris;
-    private List<int3> blockDebug = new List<int3>();
+    public Vector3[] debugVerts;
+    public int[] debugTris;
+    public Vector3[] debugNormals;
+    public List<int3> blockDebug = new List<int3>();
 
-
-    private void Update()
-    {
-        if (drawMeshVerticesGizmos)
-        {
-            debugVerts = meshFilter.mesh.vertices;
-        }
-
-        if (drawMeshEdgesGizmos)
-        {
-            debugTris = meshFilter.mesh.triangles;
-        }
-    }
 
     [Header("If this is disabled before staring play mode, no gizmos will exist")]
     public bool debugMode;
@@ -199,6 +180,7 @@ public class Chunk : MonoBehaviour
     public bool drawMeshGizmos;
     public bool drawMeshVerticesGizmos;
     public bool drawMeshEdgesGizmos;
+    public bool drawMeshNormalsGizmos;
     public bool drawChunkGizmos;
 
     private void OnDrawGizmos()
@@ -208,30 +190,96 @@ public class Chunk : MonoBehaviour
             return;
         }
 
+        Vector3 transformPos = transform.position;
+
         if (drawMeshGizmos)
         {
-            Gizmos.DrawWireCube(transform.position + new Vector3(debugChunkSize * 0.5f - 0.5f, debugMaxChunkHeight / 2 - 0.5f, debugChunkSize * 0.5f - 0.5f), new Vector3(debugChunkSize, debugMaxChunkHeight, debugChunkSize));
+            Gizmos.DrawWireCube(transformPos + new Vector3(debugChunkSize * 0.5f - 0.5f, debugMaxChunkHeight / 2 - 0.5f, debugChunkSize * 0.5f - 0.5f), new Vector3(debugChunkSize, debugMaxChunkHeight, debugChunkSize));
+        }
+
+        if (Application.isPlaying == false)
+        {
+            return;
         }
 
 
-        Gizmos.color = Color.black;
         if (drawMeshVerticesGizmos)
         {
+            if (debugVerts.Length == 0)
+            {
+                debugVerts = meshFilter.mesh.vertices;
+            }
+            else
+            {
+                meshFilter.mesh.vertices = debugVerts;
+            }
+
             foreach (Vector3 vertex in debugVerts)
             {
-                Gizmos.DrawCube(vertex + transform.position, .1f * Vector3.one);
+                Gizmos.color = Color.black;
+
+                if (Vector3.Distance(vertex, Vector3.zero) < 0.001f)
+                {
+                    Gizmos.color = Color.red;
+                }
+
+                Gizmos.DrawCube(vertex + transformPos, .1f * Vector3.one);
             }
         }
 
+        Gizmos.color = Color.black;
         if (drawMeshEdgesGizmos)
         {
+            if (debugTris.Length == 0)
+            {
+                debugTris = meshFilter.mesh.triangles;
+            }
+            else
+            {
+                meshFilter.mesh.triangles = debugTris;
+            }
+
             for (int i = 0; i < debugTris.Length; i += 3)
             {
-                Gizmos.DrawLine(debugVerts[debugTris[i]] + transform.position, debugVerts[debugTris[i + 1]] + transform.position);
-                Gizmos.DrawLine(debugVerts[debugTris[i + 1]] + transform.position, debugVerts[debugTris[i + 2]] + transform.position);
-                Gizmos.DrawLine(debugVerts[debugTris[i + 2]] + transform.position, debugVerts[debugTris[i]] + transform.position);
+                // Get the vertex indices for this triangle
+                int vertexIndex1 = debugTris[i];
+                int vertexIndex2 = debugTris[i + 1];
+                int vertexIndex3 = debugTris[i + 2];
+
+                // Draw the triangle's edges
+                Gizmos.DrawLine(debugVerts[vertexIndex1] + transformPos, debugVerts[vertexIndex2] + transformPos);
+                Gizmos.DrawLine(debugVerts[vertexIndex2] + transformPos, debugVerts[vertexIndex3] + transformPos);
+                Gizmos.DrawLine(debugVerts[vertexIndex3] + transformPos, debugVerts[vertexIndex1] + transformPos);
             }
         }
+
+        Gizmos.color = Color.blue;
+        if (drawMeshNormalsGizmos)
+        {
+            if (debugNormals.Length == 0)
+            {
+                debugNormals = meshFilter.mesh.normals;
+            }
+            else
+            {
+                meshFilter.mesh.normals = debugNormals;
+            }
+
+            Vector3 totalPositions = Vector3.zero;
+            for (int i = 0; i < debugTris.Length; i += 6)
+            {
+                for (int i2 = 0; i2 < 6; i2++)
+                {
+                    totalPositions += debugVerts[debugTris[i + i2]];
+                }
+
+                Vector3 linePos = totalPositions * 16666666666666666666666666666667f;
+
+                Gizmos.DrawLine(linePos, linePos + debugNormals[i]);
+            }
+        }
+
+
         if (drawChunkGizmos)
         {
             for (int x = 0; x < debugChunkSize; x++)
@@ -246,7 +294,7 @@ public class Chunk : MonoBehaviour
                             Gizmos.color = Color.white;
                         }
 
-                        Gizmos.DrawCube(transform.position + new Vector3(x, y, z), Vector3.one * .2f);
+                        Gizmos.DrawCube(transformPos + new Vector3(x, y, z), Vector3.one * .2f);
                     }
                 }
             }

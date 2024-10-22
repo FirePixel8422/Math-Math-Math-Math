@@ -13191,7 +13191,7 @@ Transform:
   m_GameObject: {fileID: 705507993}
   serializedVersion: 2
   m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
-  m_LocalPosition: {x: 0, y: 3, z: 0}
+  m_LocalPosition: {x: 0, y: 10, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -15036,7 +15036,7 @@ GameObject:
   - component: {fileID: 812930773}
   - component: {fileID: 812930772}
   m_Layer: 0
-  m_Name: Capsule
+  m_Name: Player
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -15191,7 +15191,7 @@ Transform:
   m_GameObject: {fileID: 812930771}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 61.76054, z: 84.567924}
+  m_LocalPosition: {x: 0, y: 23.75, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -26447,15 +26447,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   chunkCount: 0
   chunksLoaded: 0
-  chunkLoadCallsPerFrame: 250
+  chunkLoadCallsPerFrame: 500
   chunkLoadBatchDelay: 0.2
-  chunkRenderCallsPerFrame: 25
-  chunkRenderBatchDelay: 0.1
+  chunkRenderCallsPerFrame: 35
+  chunkRenderBatchDelay: 0.15
   chunkSize: 16
-  seed: 0
-  reSeedOnStart: 1
+  seed: 7
+  reSeedOnStart: 0
   atlasSize: 4
   bs: {fileID: 11400000, guid: 7f84e48d9eae74c42a1efc96c76acd2a, type: 2}
+  cubeActiveState: 
   debugBlockPositions: []
   offset: {x: 0, y: 0, z: 0}
 --- !u!4 &1407568655
@@ -26486,8 +26487,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   chunkPrefab: {fileID: 9132650834730868430, guid: f3cff2517c04bc84aa029eecc4670552, type: 3}
-  renderAmountHorizontal: 10
-  renderAmountVertical: 10
+  renderAmountHorizontal: 50
+  renderAmountVertical: 50
 --- !u!1001 &1425296617
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -27357,7 +27358,7 @@ Transform:
   m_GameObject: {fileID: 1462927817}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 60.51, z: 84.85463}
+  m_LocalPosition: {x: 0, y: 22.75, z: 0}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
