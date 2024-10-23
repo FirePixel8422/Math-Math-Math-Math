@@ -26,8 +26,8 @@ public class PlayerCamMovement : MonoBehaviour
         {
             Cursor.lockState = CursorLockMode.Locked;
 
-            transform.Rotate(Input.GetAxis("Mouse X") * mouseSensitivity * Vector3.up * Time.deltaTime);
-            verticalLookRotation -= Input.GetAxis("Mouse Y") * mouseSensitivity * Time.deltaTime;
+            transform.Rotate(Input.GetAxis("Mouse X") * mouseSensitivity * Vector3.up);
+            verticalLookRotation -= Input.GetAxis("Mouse Y") * mouseSensitivity;
             verticalLookRotation = Mathf.Clamp(verticalLookRotation, -90f, 90f);
             cameraHolder.localEulerAngles = new Vector3(verticalLookRotation, 0, 0);
         }

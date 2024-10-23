@@ -15077,7 +15077,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cameraHolder: {fileID: 963194228}
-  mouseSensitivity: 400
+  mouseSensitivity: 2.5
   canILook: 1
   rotationSpeed: 180
   shouldFollow: 0
@@ -26449,8 +26449,8 @@ MonoBehaviour:
   chunksLoaded: 0
   chunkLoadCallsPerFrame: 500
   chunkLoadBatchDelay: 0.2
-  chunkRenderCallsPerFrame: 35
-  chunkRenderBatchDelay: 0.15
+  chunkRenderCallsPerFrame: 40
+  chunkRenderBatchDelay: 0.125
   chunkSize: 16
   seed: 7
   reSeedOnStart: 0
@@ -26487,8 +26487,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   chunkPrefab: {fileID: 9132650834730868430, guid: f3cff2517c04bc84aa029eecc4670552, type: 3}
-  renderAmountHorizontal: 50
-  renderAmountVertical: 50
+  renderAmountHorizontal: 80
+  renderAmountVertical: 80
 --- !u!1001 &1425296617
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -1,10 +1,18 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using Unity.Burst;
+using Unity.Collections;
+using Unity.Jobs;
+using Unity.Mathematics;
 using UnityEngine;
 
+
+[BurstCompile]
 public static class MeshExtensions
 {
+
     public static void UnweldVertices(Mesh mesh)
     {
         Vector3[] vertices = mesh.vertices;
@@ -18,13 +26,14 @@ public static class MeshExtensions
         for (int i = 0; i < mesh.subMeshCount; i++)
         {
             int[] triangles = mesh.GetTriangles(i);
-            Vector3[] unweldedVertices = new Vector3[vertices.Length];
+            Vector3[] unweldedVertices = new Vector3[triangles.Length];
             int[] unweldedTriangles = new int[triangles.Length];
             Vector2[] unweldedUVs = new Vector2[unweldedVertices.Length];
 
             for (int j = 0; j < triangles.Length; j++)
             {
                 unweldedVertices[j] = vertices[triangles[j]]; //unwelded vertices are just all the vertices as they appear in the triangles array
+
                 if (uvs.Length > triangles[j])
                 {
                     unweldedUVs[j] = uvs[triangles[j]];
@@ -224,8 +233,6 @@ public static class MeshExtensions
     }
 
 
-
-
     /// <summary>
     /// Recalculates mesh tangents
     /// 
@@ -308,5 +315,105 @@ public static class MeshExtensions
         }
 
         mesh.tangents = tangents;
+    }
+
+
+
+
+    public static void CompactVertexListByPosition(ref NativeArray<float3> vertices, ref NativeArray<int> triangles, ref NativeArray<float2> uvs)
+    {
+        int vertexCount = vertices.Length;
+
+        NativeReference<int> validVertexCount = new NativeReference<int>(Allocator.TempJob);
+
+        NativeArray<int> vertexMap = new NativeArray<int>(vertexCount, Allocator.TempJob);
+        NativeArray<float3> newVertices = new NativeArray<float3>(vertexCount, Allocator.TempJob);
+        NativeArray<float2> newUvs = new NativeArray<float2>(vertexCount, Allocator.TempJob);
+
+
+        // Step 2: Setup and schedule the job
+        CompactVerticesJob job = new CompactVerticesJob
+        {
+            vertices = vertices,
+            uvs = uvs,
+
+            vertexMap = vertexMap,
+
+            newVertices = newVertices,
+            newUvs = newUvs,
+
+            endVertexCount = validVertexCount,
+        };
+
+        JobHandle jobHandle = job.Schedule(vertexCount, vertexCount);
+        jobHandle.Complete();
+
+
+        // Step 3: Update triangle indices to match new vertex indices
+        for (int i = 0; i < triangles.Length; i++)
+        {
+            triangles[i] = vertexMap[triangles[i]];  // Remap triangles to the new vertex indices
+        }
+
+
+        vertices = new NativeArray<float3>(validVertexCount.Value, Allocator.TempJob);
+        uvs = new NativeArray<float2>(validVertexCount.Value, Allocator.TempJob); // New array for compacted normals
+
+        NativeArray<float3>.Copy(newVertices, vertices, validVertexCount.Value);
+        NativeArray<float2>.Copy(newUvs, uvs, validVertexCount.Value);
+
+
+
+
+        validVertexCount.Dispose();
+        vertexMap.Dispose();
+
+        newVertices.Dispose();
+        newUvs.Dispose();
+    }
+
+
+
+    [BurstCompile]
+    private struct CompactVerticesJob : IJobParallelFor
+    {
+        [NoAlias][ReadOnly] public NativeArray<float3> vertices;
+        [NoAlias][ReadOnly] public NativeArray<float2> uvs;
+
+        [NoAlias] public NativeArray<int> vertexMap;
+
+        [NoAlias][WriteOnly] public NativeArray<float3> newVertices;
+        [NoAlias][WriteOnly] public NativeArray<float2> newUvs;
+
+        [NativeDisableParallelForRestriction]
+        [NoAlias] public NativeReference<int> endVertexCount;
+
+        [NoAlias] private int vertexCount;
+
+
+        [BurstCompile]
+        public void Execute(int cVertex)
+        {
+
+            if (vertices[cVertex].x == 0)
+            {
+                vertexMap[cVertex] = -1;  // Mark unused vertices
+            }
+            else
+            {
+                vertexMap[cVertex] = vertexCount;
+
+                newVertices[vertexMap[cVertex]] = vertices[cVertex];
+                newUvs[vertexMap[cVertex]] = uvs[cVertex];
+
+                Interlocked.Add(ref vertexCount, 1);
+            }
+
+
+            if (cVertex == (vertices.Length - 1))
+            {
+                endVertexCount.Value = vertexCount;
+            }
+        }
     }
 }

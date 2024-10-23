@@ -9,6 +9,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.VisualScripting;
+using UnityEditor;
 using UnityEngine;
 
 
@@ -72,7 +73,7 @@ public struct MeshCalculatorJob
         NativeArray<byte> cubeFacesActiveState = new NativeArray<byte>(blockPositionsLength * 6, Allocator.TempJob);
 
 
-        GenerateMeshCubesJobParallel_TESTING8VERTS generateMeshCubesJob = new GenerateMeshCubesJobParallel_TESTING8VERTS
+        GenerateMeshCubesJobParallel generateMeshCubesJob = new GenerateMeshCubesJobParallel
         {
             blockPositions = blockPositions,
             blockPositionsMap = blockPositionsMap,
@@ -96,8 +97,8 @@ public struct MeshCalculatorJob
 
         #region Filter Vertices, Triangles and Normals, then apply call ApplyMeshToObject
 
-        NativeArray<float3> filteredVertices = new NativeArray<float3>(calcVertexCount.Value, Allocator.Temp);
-        NativeArray<int> filteredTriangles = new NativeArray<int>(calcTriangleCount.Value, Allocator.Temp);
+        NativeArray<float3> filteredVertices = new NativeArray<float3>(calcVertexCount.Value, Allocator.TempJob);
+        NativeArray<int> filteredTriangles = new NativeArray<int>(calcTriangleCount.Value, Allocator.TempJob);
 
 
         NativeArray<float3>.Copy(vertices, filteredVertices, calcVertexCount.Value);
@@ -147,26 +148,10 @@ public struct MeshCalculatorJob
         [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeHashMap<int3, bool> blockPositionsMap;
 
-        //[NativeDisableParallelForRestriction]
-        //[NoAlias][WriteOnly] public NativeArray<float3> vertices;
-
-        //[NativeDisableParallelForRestriction]
-        //[NoAlias][WriteOnly] public NativeArray<int> triangles;
-
         public void Execute(int index)
         {
             int3 gridPosition = blockPositions[index];
             blockPositionsMap.TryAdd(gridPosition, false);
-
-            //for (int i = 0; i < 8; i++)
-            //{
-            //    vertices[index * 8 + i] = new float3(-0.1f, 0, 0);
-            //}
-
-            //for (int i = 0; i < 36; i++)
-            //{
-            //    triangles[index * 36 + i] = -1;
-            //}
         }
     }
 
@@ -190,7 +175,7 @@ public struct MeshCalculatorJob
 
 
     [BurstCompile]
-    private struct GenerateMeshCubesJobParallel_TESTING8VERTS : IJobParallelFor
+    private struct GenerateMeshCubesJobParallel : IJobParallelFor
     {
         [NoAlias][ReadOnly] public NativeArray<int3> blockPositions;
 
@@ -279,9 +264,7 @@ public struct MeshCalculatorJob
 
 
             int addedTriangles = 0;
-
-            int4 xyzw = new int4();
-            int4 xyzw_Minus = new int4();
+            int addedVertices = 0;
 
 
             int cCubeActiveStateIndex = cubeIndex * 6; // 6 faces for each cube
@@ -294,15 +277,12 @@ public struct MeshCalculatorJob
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 0] = 1;
 
-                vertices[cVertexIndex + 0] = cubeVertices[0] + cubePosition; // Vertex 4
-                vertices[cVertexIndex + 2] = cubeVertices[2] + cubePosition; // Vertex 5
-                vertices[cVertexIndex + 1] = cubeVertices[1] + cubePosition; // Vertex 6
-                vertices[cVertexIndex + 3] = cubeVertices[3] + cubePosition; // Vertex 7
+                vertices[cVertexIndex + 0] = cubeVertices[0] + cubePosition;
+                vertices[cVertexIndex + 2] = cubeVertices[2] + cubePosition;
+                vertices[cVertexIndex + 1] = cubeVertices[1] + cubePosition;
+                vertices[cVertexIndex + 3] = cubeVertices[3] + cubePosition;
 
-                xyzw.x = 1;
-                xyzw.y = 1;
-                xyzw.z = 1;
-                xyzw.w = 1;
+                addedVertices = 4;
 
                 // Add triangles for the back face
                 triangles[cTriangleIndex + 0] = cVertexIndex + 0;
@@ -321,15 +301,12 @@ public struct MeshCalculatorJob
                 cubeFacesActiveState[cCubeActiveStateIndex + 1] = 1;
 
 
-                vertices[cVertexIndex + 4] = cubeVertices[4] + cubePosition; // Vertex 0
-                vertices[cVertexIndex + 5] = cubeVertices[5] + cubePosition; // Vertex 1
-                vertices[cVertexIndex + 6] = cubeVertices[6] + cubePosition; // Vertex 2
-                vertices[cVertexIndex + 7] = cubeVertices[7] + cubePosition; // Vertex 3
+                vertices[cVertexIndex + 4] = cubeVertices[4] + cubePosition;
+                vertices[cVertexIndex + 5] = cubeVertices[5] + cubePosition;
+                vertices[cVertexIndex + 6] = cubeVertices[6] + cubePosition;
+                vertices[cVertexIndex + 7] = cubeVertices[7] + cubePosition;
 
-                xyzw_Minus.x = 1;
-                xyzw_Minus.y = 1;
-                xyzw_Minus.z = 1;
-                xyzw_Minus.w = 1;
+                addedVertices = 8;
 
                 // Add triangles for the front face
                 triangles[cTriangleIndex + addedTriangles + 0] = cVertexIndex + 4;
@@ -348,15 +325,12 @@ public struct MeshCalculatorJob
                 cubeFacesActiveState[cCubeActiveStateIndex + 2] = 1;
 
 
-                vertices[cVertexIndex + 1] = cubeVertices[1] + cubePosition; // Vertex 1
-                vertices[cVertexIndex + 6] = cubeVertices[6] + cubePosition; // Vertex 5
-                vertices[cVertexIndex + 2] = cubeVertices[2] + cubePosition; // Vertex 6
-                vertices[cVertexIndex + 5] = cubeVertices[5] + cubePosition; // Vertex 2
+                vertices[cVertexIndex + 1] = cubeVertices[1] + cubePosition;
+                vertices[cVertexIndex + 6] = cubeVertices[6] + cubePosition;
+                vertices[cVertexIndex + 2] = cubeVertices[2] + cubePosition;
+                vertices[cVertexIndex + 5] = cubeVertices[5] + cubePosition;
 
-                xyzw.y = 1;
-                xyzw.z = 1;
-                xyzw_Minus.y = 1;
-                xyzw_Minus.z = 1;
+                addedVertices = 7;
 
                 // Add triangles for the right face
                 triangles[cTriangleIndex + addedTriangles + 0] = cVertexIndex + 1;
@@ -375,15 +349,12 @@ public struct MeshCalculatorJob
                 cubeFacesActiveState[cCubeActiveStateIndex + 3] = 1;
 
 
-                vertices[cVertexIndex + 0] = cubeVertices[0] + cubePosition; // Vertex 0
-                vertices[cVertexIndex + 7] = cubeVertices[7] + cubePosition; // Vertex 4
-                vertices[cVertexIndex + 4] = cubeVertices[4] + cubePosition; // Vertex 7
-                vertices[cVertexIndex + 3] = cubeVertices[3] + cubePosition; // Vertex 3
+                vertices[cVertexIndex + 0] = cubeVertices[0] + cubePosition;
+                vertices[cVertexIndex + 7] = cubeVertices[7] + cubePosition;
+                vertices[cVertexIndex + 4] = cubeVertices[4] + cubePosition;
+                vertices[cVertexIndex + 3] = cubeVertices[3] + cubePosition;
 
-                xyzw.x = 1;
-                xyzw_Minus.w = 1;
-                xyzw_Minus.x = 1;
-                xyzw.z = 1;
+                addedVertices = 8;
 
                 // Add triangles for the left face
                 triangles[cTriangleIndex + addedTriangles + 0] = cVertexIndex + 0;
@@ -402,16 +373,12 @@ public struct MeshCalculatorJob
                 cubeFacesActiveState[cCubeActiveStateIndex + 4] = 1;
 
 
-                vertices[cVertexIndex + 3] = cubeVertices[3] + cubePosition; // Vertex 4
-                vertices[cVertexIndex + 6] = cubeVertices[6] + cubePosition; // Vertex 5
-                vertices[cVertexIndex + 2] = cubeVertices[2] + cubePosition; // Vertex 6
-                vertices[cVertexIndex + 7] = cubeVertices[7] + cubePosition; // Vertex 7
+                vertices[cVertexIndex + 3] = cubeVertices[3] + cubePosition;
+                vertices[cVertexIndex + 6] = cubeVertices[6] + cubePosition;
+                vertices[cVertexIndex + 2] = cubeVertices[2] + cubePosition;
+                vertices[cVertexIndex + 7] = cubeVertices[7] + cubePosition;
 
-
-                xyzw.w = 1;
-                xyzw_Minus.z = 1;
-                xyzw.z = 1;
-                xyzw_Minus.w = 1;
+                addedVertices = 8;
 
                 // Add triangles for the top face
                 triangles[cTriangleIndex + addedTriangles + 0] = cVertexIndex + 3;
@@ -430,15 +397,12 @@ public struct MeshCalculatorJob
                 cubeFacesActiveState[cCubeActiveStateIndex + 5] = 1;
 
 
-                vertices[cVertexIndex + 0] = cubeVertices[0] + cubePosition; // Vertex 0
-                vertices[cVertexIndex + 5] = cubeVertices[5] + cubePosition; // Vertex 1
-                vertices[cVertexIndex + 1] = cubeVertices[1] + cubePosition; // Vertex 2
-                vertices[cVertexIndex + 4] = cubeVertices[4] + cubePosition; // Vertex 3
+                vertices[cVertexIndex + 0] = cubeVertices[0] + cubePosition;
+                vertices[cVertexIndex + 5] = cubeVertices[5] + cubePosition;
+                vertices[cVertexIndex + 1] = cubeVertices[1] + cubePosition;
+                vertices[cVertexIndex + 4] = cubeVertices[4] + cubePosition;
 
-                xyzw.x = 1;
-                xyzw_Minus.y = 1;
-                xyzw.y = 1;
-                xyzw_Minus.x = 1;
+                addedVertices = 6;
 
                 // Add triangles for the bottom face
                 triangles[cTriangleIndex + addedTriangles + 0] = cVertexIndex + 0;
@@ -453,11 +417,11 @@ public struct MeshCalculatorJob
 
             #endregion
 
-            Interlocked.Add(ref cVertexIndex, 8);//xyzw.x + xyzw.y + xyzw.z + xyzw.w + xyzw_Minus.x + xyzw_Minus.y + xyzw_Minus.z + xyzw_Minus.w); 
+            Interlocked.Add(ref cVertexIndex, addedVertices);
 
             Interlocked.Add(ref cTriangleIndex, addedTriangles);
 
-
+            
             if (cubeIndex == (blockPositions.Length - 1))
             {
                 FinilizeJobData();
@@ -467,7 +431,7 @@ public struct MeshCalculatorJob
 
         private void FinilizeJobData()
         {
-            calcVertexCount.Value = blockPositions.Length * 8;
+            calcVertexCount.Value = cVertexIndex;
             calcTriangleCount.Value = cTriangleIndex;
         }
     }
@@ -479,6 +443,9 @@ public struct MeshCalculatorJob
     {
         NativeArray<float2> uvs = new NativeArray<float2>(vertices.Length, Allocator.TempJob);
         TextureCalculator.ScheduleUVGeneration(uvs, cubeFacesActiveState, textureIndexs, atlasSize);
+
+
+        MeshExtensions.CompactVertexListByPosition(ref vertices, ref triangles, ref uvs);
 
 
         if (vertices.Length > 65535)
@@ -494,6 +461,8 @@ public struct MeshCalculatorJob
         mesh.normals = new Vector3[vertices.Length];
 
         mesh.RecalculateBounds();
+
+
 
         MeshExtensions.RecalculateNormals(mesh, 0);
 

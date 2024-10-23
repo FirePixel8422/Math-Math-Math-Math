@@ -134,8 +134,8 @@ MonoBehaviour:
   debugMode: 0
   debugChunkSize: 16
   debugMaxChunkHeight: 24
-  drawMeshGizmos: 0
-  drawMeshVerticesGizmos: 0
-  drawMeshEdgesGizmos: 0
+  drawMeshGizmos: 1
+  drawMeshVerticesGizmos: 1
+  drawMeshEdgesGizmos: 1
   drawMeshNormalsGizmos: 0
   drawChunkGizmos: 0
