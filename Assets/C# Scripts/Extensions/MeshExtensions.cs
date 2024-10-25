@@ -12,6 +12,7 @@ using UnityEngine;
 [BurstCompile]
 public static class MeshExtensions
 {
+    #region SCAM
 
     public static void UnweldVertices(Mesh mesh)
     {
@@ -317,6 +318,7 @@ public static class MeshExtensions
         mesh.tangents = tangents;
     }
 
+    #endregion
 
 
 
@@ -332,7 +334,7 @@ public static class MeshExtensions
 
 
         // Step 2: Setup and schedule the job
-        CompactVerticesJob job = new CompactVerticesJob
+        CompactVerticesJobParallel job = new CompactVerticesJobParallel
         {
             vertices = vertices,
             uvs = uvs,
@@ -364,7 +366,6 @@ public static class MeshExtensions
 
 
 
-
         validVertexCount.Dispose();
         vertexMap.Dispose();
 
@@ -375,7 +376,7 @@ public static class MeshExtensions
 
 
     [BurstCompile]
-    private struct CompactVerticesJob : IJobParallelFor
+    private struct CompactVerticesJobParallel : IJobParallelFor
     {
         [NoAlias][ReadOnly] public NativeArray<float3> vertices;
         [NoAlias][ReadOnly] public NativeArray<float2> uvs;

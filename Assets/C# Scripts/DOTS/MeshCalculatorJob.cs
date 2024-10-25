@@ -156,6 +156,8 @@ public struct MeshCalculatorJob
     }
 
 
+
+
     [BurstCompile]
     private struct CalculateChunkConnectionsJobParallel : IJobParallelFor
     {
@@ -171,6 +173,7 @@ public struct MeshCalculatorJob
             blockPositionsMap.TryAdd(gridPosition, false);
         }
     }
+
 
 
 
@@ -213,7 +216,7 @@ public struct MeshCalculatorJob
         [NoAlias]
         [ReadOnly]
         private static readonly float3[] cubeVertices = new float3[]
-        {
+        { 
             new float3(-0.5f, -0.5f, -0.5f), // Vertex 0
             new float3( 0.5f, -0.5f, -0.5f), // Vertex 1
             new float3( 0.5f,  0.5f, -0.5f), // Vertex 2
@@ -223,6 +226,30 @@ public struct MeshCalculatorJob
             new float3( 0.5f,  0.5f,  0.5f), // Vertex 6
             new float3(-0.5f,  0.5f,  0.5f)  // Vertex 7
         };
+        
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //  Remove Statics ^, burst doesnt work
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+
+
+
 
         [NoAlias] private int cVertexIndex;
         [NoAlias] private int cTriangleIndex;
@@ -458,13 +485,11 @@ public struct MeshCalculatorJob
 
         mesh.uv = uvs.Reinterpret<Vector2>().ToArray();
 
-        mesh.normals = new Vector3[vertices.Length];
-
         mesh.RecalculateBounds();
 
+        mesh.RecalculateNormals();
 
-
-        MeshExtensions.RecalculateNormals(mesh, 0);
+        //MeshExtensions.RecalculateNormals(mesh, 0);
 
         mesh.Optimize();
 

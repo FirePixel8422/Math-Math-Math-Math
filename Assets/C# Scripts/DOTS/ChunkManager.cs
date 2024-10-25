@@ -24,13 +24,12 @@ public class ChunkManager : MonoBehaviour
 
     public int chunkCount;
     public int chunksLoaded;
+    public int chunksRendered;
 
     [Header("")]
     public int chunkLoadCallsPerFrame;
-    public float chunkLoadBatchDelay;
 
     public int chunkRenderCallsPerFrame;
-    public float chunkRenderBatchDelay;
 
 
     [Header("")]
@@ -80,8 +79,6 @@ public class ChunkManager : MonoBehaviour
     [BurstCompile]
     private IEnumerator CallChunks()
     {
-        WaitForSeconds loadWait = new WaitForSeconds(chunkLoadBatchDelay);
-        WaitForSeconds renderWait = new WaitForSeconds(chunkRenderBatchDelay);
 
         while (true)
         {
@@ -110,8 +107,7 @@ public class ChunkManager : MonoBehaviour
                 {
                     break;
                 }
-
-                yield return loadWait;
+                yield return null;
             }
 
 
@@ -123,13 +119,15 @@ public class ChunkManager : MonoBehaviour
 
                     chunkList.RemoveAt(0);
 
+                    chunksRendered += 1;
+
                     if (chunkList.Count == 0)
                     {
                         break;
                     }
                 }
 
-                yield return renderWait;
+                yield return null;
             }
         }
     }
