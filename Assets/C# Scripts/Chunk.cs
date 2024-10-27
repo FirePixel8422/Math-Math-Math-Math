@@ -8,7 +8,6 @@ using Unity.Transforms;
 
 
 
-[RequireComponent(typeof(MeshRenderer))]
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshCollider))]
 [BurstCompile]
@@ -16,10 +15,11 @@ public class Chunk : MonoBehaviour
 {
     public ChunkData chunkData;
 
-    public MeshRenderer meshRenderer;
     public MeshFilter meshFilter;
     public MeshCollider meshCollider;
 
+
+    public int3 gridPos;
 
 
     private void Start()
@@ -28,26 +28,16 @@ public class Chunk : MonoBehaviour
     }
 
 
+
     [BurstCompile]
     public void LoadChunk(int chunkSize, int maxChunkHeight, int seed, float scale, int octaves, float persistence, float lacunarity)
     {
-
-#if UNITY_EDITOR
-        if (debugMode)
-        {
-            sw = new Stopwatch();
-
-            debugChunkSize = chunkSize;
-            debugMaxChunkHeight = maxChunkHeight;
-        }
-#endif
-
-
         int3 worldPos = new int3((int)transform.position.x, 0, (int)transform.position.z);
+        gridPos = worldPos / chunkSize;
 
         NativeArray<float> noiseMap = NoiseMapJob.GenerateNoiseMap(chunkSize, seed, scale, octaves, persistence, lacunarity, new int2(worldPos.x, worldPos.z));
 
-        GenerateBlockPos(noiseMap, chunkSize, maxChunkHeight, (worldPos - new int3((int)(chunkSize * 0.5f), 0, (int)(chunkSize * 0.5f))) / chunkSize);
+        GenerateBlockPos(noiseMap, chunkSize, maxChunkHeight, gridPos);
 
         noiseMap.Dispose();
     }
@@ -161,6 +151,7 @@ public class Chunk : MonoBehaviour
 
 
 
+#if UNITY_EDITOR
     #region EditorOnly_Debug
 
     public Stopwatch sw;
@@ -174,14 +165,13 @@ public class Chunk : MonoBehaviour
     [Header("If this is disabled before staring play mode, no gizmos will exist")]
     public bool debugMode;
 
-    public int debugChunkSize, debugMaxChunkHeight;
-
 
     public bool drawMeshGizmos;
     public bool drawMeshVerticesGizmos;
     public bool drawMeshEdgesGizmos;
     public bool drawMeshNormalsGizmos;
     public bool drawChunkGizmos;
+    public bool drawNeigbourConnectionsGizmos;
 
     private void OnDrawGizmos()
     {
@@ -190,11 +180,15 @@ public class Chunk : MonoBehaviour
             return;
         }
 
+
         Vector3 transformPos = transform.position;
+
+        float chunkSize = ChunkManager.staticChunkSize;
+        float maxChunkHeight = ChunkManager.Instance.bs.maxChunkHeight;
 
         if (drawMeshGizmos)
         {
-            Gizmos.DrawWireCube(transformPos + new Vector3(debugChunkSize * 0.5f - 0.5f, debugMaxChunkHeight / 2 - 0.5f, debugChunkSize * 0.5f - 0.5f), new Vector3(debugChunkSize, debugMaxChunkHeight, debugChunkSize));
+            Gizmos.DrawWireCube(transformPos + new Vector3(chunkSize * 0.5f - 0.5f, maxChunkHeight / 2 - 0.5f, chunkSize * 0.5f - 0.5f), new Vector3(chunkSize, maxChunkHeight, chunkSize));
         }
 
         if (Application.isPlaying == false)
@@ -279,14 +273,14 @@ public class Chunk : MonoBehaviour
             }
         }
 
-
+        Gizmos.color = Color.black;
         if (drawChunkGizmos)
         {
-            for (int x = 0; x < debugChunkSize; x++)
+            for (int x = 0; x < chunkSize; x++)
             {
-                for (int z = 0; z < debugChunkSize; z++)
+                for (int z = 0; z < chunkSize; z++)
                 {
-                    for (int y = 0; y < debugMaxChunkHeight; y++)
+                    for (int y = 0; y < maxChunkHeight; y++)
                     {
                         Gizmos.color = Color.black;
                         if (blockDebug.Contains(new int3(x, y, z)))
@@ -297,6 +291,17 @@ public class Chunk : MonoBehaviour
                         Gizmos.DrawCube(transformPos + new Vector3(x, y, z), Vector3.one * .2f);
                     }
                 }
+            }
+        }
+
+        Gizmos.color = Color.white;
+        if (drawNeigbourConnectionsGizmos)
+        {
+            NativeArray<int3> blockPositions = ChunkManager.GetConnectedChunkEdgePositionsCount(chunkData.gridPos);
+
+            foreach (int3 blockPosition in blockPositions)
+            {
+                Gizmos.DrawWireCube(transformPos + new Vector3(blockPosition.x, blockPosition.y, blockPosition.z), Vector3.one);
             }
         }
     }
@@ -333,6 +338,7 @@ public class Chunk : MonoBehaviour
 
         example2DArray.Dispose();
     }
+#endif
 }
 
 

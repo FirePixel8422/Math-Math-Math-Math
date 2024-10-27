@@ -73,6 +73,29 @@ public struct MeshCalculatorJob
         NativeArray<byte> cubeFacesActiveState = new NativeArray<byte>(blockPositionsLength * 6, Allocator.TempJob);
 
 
+        NativeArray<int3> neighborOffsetsAndNormals = new NativeArray<int3>(6, Allocator.TempJob);
+
+        neighborOffsetsAndNormals[0] = new int3(0, 0, 1);     // Z+
+        neighborOffsetsAndNormals[1] = new int3(0, 0, -1);    // Z-
+        neighborOffsetsAndNormals[2] = new int3(-1, 0, 0);    // X-
+        neighborOffsetsAndNormals[3] = new int3(1, 0, 0);     // X+
+        neighborOffsetsAndNormals[4] = new int3(0, 1, 0);     // Y+
+        neighborOffsetsAndNormals[5] = new int3(0, -1, 0);    // Y-
+
+
+        NativeArray<float3> cubeVertices = new NativeArray<float3>(blockPositionsLength, Allocator.TempJob);
+
+        cubeVertices[0] = new float3(-0.5f, -0.5f, -0.5f);  // Vertex 0
+        cubeVertices[1] = new float3(0.5f, -0.5f, -0.5f);   // Vertex 1
+        cubeVertices[2] = new float3(0.5f, 0.5f, -0.5f);    // Vertex 2
+        cubeVertices[3] = new float3(-0.5f, 0.5f, -0.5f);   // Vertex 3
+        cubeVertices[4] = new float3(-0.5f, -0.5f, 0.5f);   // Vertex 4
+        cubeVertices[5] = new float3(0.5f, -0.5f, 0.5f);    // Vertex 5
+        cubeVertices[6] = new float3(0.5f, 0.5f, 0.5f);     // Vertex 6
+        cubeVertices[7] = new float3(-0.5f, 0.5f, 0.5f);    // Vertex 7
+
+
+
         GenerateMeshCubesJobParallel generateMeshCubesJob = new GenerateMeshCubesJobParallel
         {
             blockPositions = blockPositions,
@@ -85,6 +108,9 @@ public struct MeshCalculatorJob
             calcTriangleCount = calcTriangleCount,
 
             cubeFacesActiveState = cubeFacesActiveState,
+
+            neighborOffsetsAndNormals = neighborOffsetsAndNormals,
+            cubeVertices = cubeVertices,
         };
 
         mainJobHandle = generateMeshCubesJob.Schedule(blockPositionsLength, blockPositionsLength, mainJobHandle);
@@ -128,7 +154,7 @@ public struct MeshCalculatorJob
         cubeFacesActiveState.Dispose();
 
         filteredVertices.Dispose();
-        filteredTriangles.Dispose(); 
+        filteredTriangles.Dispose();
 
         connectedChunkEdgePositions.Dispose();
 
@@ -201,54 +227,8 @@ public struct MeshCalculatorJob
         [NoAlias][WriteOnly] public NativeReference<int> calcTriangleCount;
 
 
-        [NoAlias]
-        [ReadOnly]
-        private static readonly int3[] neighborOffsetsAndNormals = new int3[]
-        {
-            new int3(0, 0, 1),     // Z+
-            new int3(0, 0, -1),    // Z-
-            new int3(-1, 0, 0),    // X-
-            new int3(1, 0, 0),     // X+
-            new int3(0, 1, 0),     // Y+
-            new int3(0, -1, 0)     // Y-
-        };
-
-        [NoAlias]
-        [ReadOnly]
-        private static readonly float3[] cubeVertices = new float3[]
-        { 
-            new float3(-0.5f, -0.5f, -0.5f), // Vertex 0
-            new float3( 0.5f, -0.5f, -0.5f), // Vertex 1
-            new float3( 0.5f,  0.5f, -0.5f), // Vertex 2
-            new float3(-0.5f,  0.5f, -0.5f), // Vertex 3
-            new float3(-0.5f, -0.5f,  0.5f), // Vertex 4
-            new float3( 0.5f, -0.5f,  0.5f), // Vertex 5
-            new float3( 0.5f,  0.5f,  0.5f), // Vertex 6
-            new float3(-0.5f,  0.5f,  0.5f)  // Vertex 7
-        };
-        
-        //
-        //
-        //
-        //
-        //
-        //
-        //
-        //
-        //  Remove Statics ^, burst doesnt work
-        //
-        //
-        //
-        //
-        //
-        //
-        //
-        //
-        //
-        //
-        //
-
-
+        [NoAlias][ReadOnly] public NativeArray<int3> neighborOffsetsAndNormals;
+        [NoAlias][ReadOnly] public NativeArray<float3> cubeVertices;
 
 
         [NoAlias] private int cVertexIndex;
@@ -444,6 +424,7 @@ public struct MeshCalculatorJob
 
             #endregion
 
+            
             Interlocked.Add(ref cVertexIndex, addedVertices);
 
             Interlocked.Add(ref cTriangleIndex, addedTriangles);
@@ -474,6 +455,7 @@ public struct MeshCalculatorJob
 
         MeshExtensions.CompactVertexListByPosition(ref vertices, ref triangles, ref uvs);
 
+        //return;
 
         if (vertices.Length > 65535)
         {
