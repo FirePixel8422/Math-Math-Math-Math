@@ -19,9 +19,6 @@ public class Chunk : MonoBehaviour
     public MeshCollider meshCollider;
 
 
-    public int3 gridPos;
-
-
     private void Start()
     {
         ChunkManager.Instance.AddChunksToQue(this);
@@ -33,7 +30,7 @@ public class Chunk : MonoBehaviour
     public void LoadChunk(int chunkSize, int maxChunkHeight, int seed, float scale, int octaves, float persistence, float lacunarity)
     {
         int3 worldPos = new int3((int)transform.position.x, 0, (int)transform.position.z);
-        gridPos = worldPos / chunkSize;
+        int3 gridPos = worldPos / chunkSize;
 
         NativeArray<float> noiseMap = NoiseMapJob.GenerateNoiseMap(chunkSize, seed, scale, octaves, persistence, lacunarity, new int2(worldPos.x, worldPos.z));
 
@@ -130,9 +127,7 @@ public class Chunk : MonoBehaviour
     [BurstCompile]
     public void RenderChunk(int atlasSize)
     {
-        MeshCalculatorJob.CallGenerateMeshJob(chunkData.gridPos, chunkData.blockPositions, atlasSize, meshFilter.mesh, meshCollider, debugMode);
-
-        //chunkData.blockPositions.Dispose();
+        MeshCalculatorJob.CallGenerateMeshJob(chunkData.gridPos, chunkData.blockPositions, atlasSize, meshFilter.mesh, meshCollider);
     }
 
 

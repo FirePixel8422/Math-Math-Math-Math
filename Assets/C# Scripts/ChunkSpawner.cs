@@ -18,7 +18,6 @@ public class ChunkSpawner : MonoBehaviour
         Vector3 centerOffset = new Vector3(renderAmount * 0.5f * chunkSize, 0, renderAmount * 0.5f * chunkSize);
         if (renderAmount % 2 != 0)
         {
-            print("offset applied");
             centerOffset.x -= chunkSize * 0.5f;
             centerOffset.z -= chunkSize * 0.5f;
         }

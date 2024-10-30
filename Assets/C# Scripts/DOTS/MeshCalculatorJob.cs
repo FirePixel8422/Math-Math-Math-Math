@@ -16,7 +16,7 @@ using UnityEngine;
 [BurstCompile]
 public struct MeshCalculatorJob
 {
-    public static void CallGenerateMeshJob(int3 chunkGridPos, NativeArray<int3> blockPositions, int atlasSize, Mesh mesh, MeshCollider coll, bool debugMode = false)
+    public static void CallGenerateMeshJob(int3 chunkGridPos, NativeArray<int3> blockPositions, int atlasSize, Mesh mesh, MeshCollider coll)
     {
         JobHandle mainJobHandle;
 
@@ -44,7 +44,7 @@ public struct MeshCalculatorJob
 
         #region Calculate ConnectedChunks Edge Positions Job
 
-        NativeArray<int3> connectedChunkEdgePositions = ChunkManager.GetConnectedChunkEdgePositionsCount(chunkGridPos, debugMode);
+        NativeArray<int3> connectedChunkEdgePositions = ChunkManager.GetConnectedChunkEdgePositionsCount(chunkGridPos);
 
         CalculateChunkConnectionsJobParallel calculateChunkConnectionsJobParallel = new CalculateChunkConnectionsJobParallel
         {
@@ -83,7 +83,7 @@ public struct MeshCalculatorJob
         neighborOffsetsAndNormals[5] = new int3(0, -1, 0);    // Y-
 
 
-        NativeArray<float3> cubeVertices = new NativeArray<float3>(blockPositionsLength, Allocator.TempJob);
+        NativeArray<float3> cubeVertices = new NativeArray<float3>(8, Allocator.TempJob);
 
         cubeVertices[0] = new float3(-0.5f, -0.5f, -0.5f);  // Vertex 0
         cubeVertices[1] = new float3(0.5f, -0.5f, -0.5f);   // Vertex 1
@@ -453,7 +453,7 @@ public struct MeshCalculatorJob
         TextureCalculator.ScheduleUVGeneration(uvs, cubeFacesActiveState, textureIndexs, atlasSize);
 
 
-        MeshExtensions.CompactVertexListByPosition(ref vertices, ref triangles, ref uvs);
+        //MeshExtensions.CompactVertexListByPosition(ref vertices, ref triangles, ref uvs);
 
         //return;
 
@@ -462,18 +462,17 @@ public struct MeshCalculatorJob
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         }
 
-        mesh.vertices = vertices.Reinterpret<Vector3>().ToArray();
-        mesh.triangles = triangles.ToArray();
-
-        mesh.uv = uvs.Reinterpret<Vector2>().ToArray();
+        mesh.SetVertices(vertices);
+        mesh.SetTriangles(triangles.ToArray(), 0);
+        mesh.SetUVs(0, uvs);
 
         mesh.RecalculateBounds();
-
         mesh.RecalculateNormals();
 
-        //MeshExtensions.RecalculateNormals(mesh, 0);
+        mesh.tangents = null;
 
         mesh.Optimize();
+        mesh.MarkDynamic();
 
         coll.sharedMesh = mesh;
 

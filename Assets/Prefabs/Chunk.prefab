@@ -55,7 +55,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: -876546973899608171, guid: 02cde9a8c14613d4e8537ef59e470fd6, type: 3}
+  - {fileID: 2100000, guid: 75980fa5f927b884bb1975754934b03b, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -131,10 +131,9 @@ MonoBehaviour:
   debugNormals: []
   blockDebug: []
   debugMode: 0
-  debugChunkSize: 16
-  debugMaxChunkHeight: 24
   drawMeshGizmos: 1
   drawMeshVerticesGizmos: 1
   drawMeshEdgesGizmos: 1
   drawMeshNormalsGizmos: 0
   drawChunkGizmos: 0
+  drawNeigbourConnectionsGizmos: 0

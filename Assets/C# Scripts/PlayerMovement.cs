@@ -74,7 +74,7 @@ public class PlayerMovement : MonoBehaviour {
 
         if (horizontalInput == 0 && verticalInput == 0)
         {
-            rb.velocity = new Vector3(0, rb.velocity.y, 0);
+            rb.velocity = new Vector3(0, targetVelocity.y, 0);
         }
         else
         {

@@ -396,11 +396,7 @@ public static class MeshExtensions
         public void Execute(int cVertex)
         {
 
-            if (vertices[cVertex].x == 0)
-            {
-                vertexMap[cVertex] = -1;  // Mark unused vertices
-            }
-            else
+            if (vertices[cVertex].x != 0)
             {
                 vertexMap[cVertex] = vertexCount;
 

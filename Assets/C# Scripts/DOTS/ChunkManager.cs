@@ -46,8 +46,6 @@ public class ChunkManager : MonoBehaviour
 
     private static NativeHashMap<int3, ChunkData> chunks;
 
-    public byte[] cubeActiveState;
-
 
 
     public void Init()
@@ -79,7 +77,6 @@ public class ChunkManager : MonoBehaviour
     [BurstCompile]
     private IEnumerator CallChunks()
     {
-
         while (true)
         {
             yield return new WaitUntil(() => chunkList.Count > 0);
@@ -133,7 +130,7 @@ public class ChunkManager : MonoBehaviour
     }
 
 
-    public static NativeArray<int3> GetConnectedChunkEdgePositionsCount(int3 requesterChunkPos, bool debug = false)
+    public static NativeArray<int3> GetConnectedChunkEdgePositionsCount(int3 requesterChunkPos)
     {
         #region Setup Chunk Neigbour Data
 
@@ -177,7 +174,7 @@ public class ChunkManager : MonoBehaviour
 
 
 
-        NativeList<JobHandle> jobHandles = new NativeList<JobHandle>(4, Allocator.TempJob);
+        JobHandle jobHandle = new JobHandle();
         int startIndex = 0;
 
         if (leftAmount != 0)
@@ -195,7 +192,7 @@ public class ChunkManager : MonoBehaviour
 
             startIndex += leftAmount;
 
-            jobHandles.Add(addConnectedChunkEdgesLeft.Schedule(leftAmount, leftAmount));
+            jobHandle = addConnectedChunkEdgesLeft.Schedule(leftAmount, leftAmount);
         }
 
         if (rightAmount != 0)
@@ -215,10 +212,10 @@ public class ChunkManager : MonoBehaviour
 
             startIndex += rightAmount;
 
-            jobHandles.Add(addConnectedChunkEdgesRight.Schedule(rightAmount, rightAmount, jobHandles.Length == 0 ? default : jobHandles[jobHandles.Length -1]));
+            jobHandle = addConnectedChunkEdgesRight.Schedule(rightAmount, rightAmount, jobHandle);
         }
 
-        if(forwardAmount != 0)
+        if (forwardAmount != 0)
         {
             AddConnectedChunkEdge addConnectedChunkEdgesForward = new AddConnectedChunkEdge()
             {
@@ -235,10 +232,10 @@ public class ChunkManager : MonoBehaviour
 
             startIndex += forwardAmount;
 
-            jobHandles.Add(addConnectedChunkEdgesForward.Schedule(forwardAmount, forwardAmount, jobHandles.Length == 0 ? default : jobHandles[jobHandles.Length - 1]));
+            jobHandle = addConnectedChunkEdgesForward.Schedule(forwardAmount, forwardAmount, jobHandle);
         }
 
-        if(backAmount != 0)
+        if (backAmount != 0)
         {
             AddConnectedChunkEdge addConnectedChunkEdgesBack = new AddConnectedChunkEdge()
             {
@@ -253,27 +250,16 @@ public class ChunkManager : MonoBehaviour
                 chunkSize = staticChunkSize,
             };
 
-            jobHandles.Add(addConnectedChunkEdgesBack.Schedule(backAmount, backAmount, jobHandles.Length == 0 ? default : jobHandles[jobHandles.Length - 1]));
+            jobHandle = addConnectedChunkEdgesBack.Schedule(backAmount, backAmount, jobHandle);
         }
 
 
-        JobHandle.CompleteAll(jobHandles.AsArray());
-
-
-#if UNITY_EDITOR
-        if (debug)
-        {
-            Instance.debugBlockPositions = new int3[connectedChunkEdgePositions.Length];
-
-            for (int i = 0; i < Instance.debugBlockPositions.Length; i++)
-            {
-                Instance.debugBlockPositions[i] = connectedChunkEdgePositions[i];
-            }
-        }
-#endif
+        jobHandle.Complete();
 
         return connectedChunkEdgePositions;
     }
+
+
 
 
     [BurstCompile]
@@ -297,24 +283,4 @@ public class ChunkManager : MonoBehaviour
             connectedChunkEdgePositions[startIndex + index] = blockPositions[index] + dirModifier - new int3(chunkSize, 0, chunkSize);
         }
     }
-
-
-
-#if UNITY_EDITOR
-    public int3[] debugBlockPositions;
-    public Vector3 offset;
-
-    private void OnDrawGizmos()
-    {
-        if(debugBlockPositions.Length == 0)
-        {
-            return;
-        }
-
-        for (int i = 0; i < debugBlockPositions.Length; i++)
-        {
-            Gizmos.DrawWireCube(new Vector3(debugBlockPositions[i].x, debugBlockPositions[i].y, debugBlockPositions[i].z) + offset, Vector3.one);
-        }
-    }
-#endif
 }
