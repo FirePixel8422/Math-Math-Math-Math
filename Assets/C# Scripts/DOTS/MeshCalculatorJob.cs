@@ -18,13 +18,48 @@ public struct MeshCalculatorJob
 {
     public static void CallGenerateMeshJob(int3 chunkGridPos, NativeArray<int3> blockPositions, int atlasSize, Mesh mesh, MeshCollider coll)
     {
+        #region Data Creation
+
         JobHandle mainJobHandle;
 
         int blockPositionsLength = blockPositions.Length;
 
         NativeHashMap<int3, bool> blockPositionsMap = new NativeHashMap<int3, bool>(blockPositionsLength, Allocator.TempJob);
 
+        NativeArray<float3> vertices = new NativeArray<float3>(blockPositionsLength * 8, Allocator.TempJob);
+        NativeReference<int> calcVertexCount = new NativeReference<int>(Allocator.TempJob);
 
+        NativeArray<int> triangles = new NativeArray<int>(blockPositionsLength * 36, Allocator.TempJob);
+        NativeReference<int> calcTriangleCount = new NativeReference<int>(Allocator.TempJob);
+
+
+        NativeArray<int> textureIndexs = new NativeArray<int>(blockPositionsLength, Allocator.TempJob);
+
+        NativeArray<byte> cubeFacesActiveState = new NativeArray<byte>(blockPositionsLength * 6, Allocator.TempJob);
+
+
+        NativeArray<int3> neighborOffsetsAndNormals = new NativeArray<int3>(6, Allocator.TempJob);
+
+        neighborOffsetsAndNormals[0] = new int3(0, 0, 1);     // Z+
+        neighborOffsetsAndNormals[1] = new int3(0, 0, -1);    // Z-
+        neighborOffsetsAndNormals[2] = new int3(-1, 0, 0);    // X-
+        neighborOffsetsAndNormals[3] = new int3(1, 0, 0);     // X+
+        neighborOffsetsAndNormals[4] = new int3(0, 1, 0);     // Y+
+        neighborOffsetsAndNormals[5] = new int3(0, -1, 0);    // Y-
+
+
+        NativeArray<float3> cubeVertices = new NativeArray<float3>(8, Allocator.TempJob);
+
+        cubeVertices[0] = new float3(-0.5f, -0.5f, -0.5f);  // Vertex 0
+        cubeVertices[1] = new float3(0.5f, -0.5f, -0.5f);   // Vertex 1
+        cubeVertices[2] = new float3(0.5f, 0.5f, -0.5f);    // Vertex 2
+        cubeVertices[3] = new float3(-0.5f, 0.5f, -0.5f);   // Vertex 3
+        cubeVertices[4] = new float3(-0.5f, -0.5f, 0.5f);   // Vertex 4
+        cubeVertices[5] = new float3(0.5f, -0.5f, 0.5f);    // Vertex 5
+        cubeVertices[6] = new float3(0.5f, 0.5f, 0.5f);     // Vertex 6
+        cubeVertices[7] = new float3(-0.5f, 0.5f, 0.5f);    // Vertex 7
+
+        #endregion
 
 
         #region SetupData Job
@@ -60,41 +95,6 @@ public struct MeshCalculatorJob
 
 
         #region GenerateMeshCubes Job
-
-        NativeArray<float3> vertices = new NativeArray<float3>(blockPositionsLength * 8, Allocator.TempJob);
-        NativeReference<int> calcVertexCount = new NativeReference<int>(Allocator.TempJob);
-
-        NativeArray<int> triangles = new NativeArray<int>(blockPositionsLength * 36, Allocator.TempJob);
-        NativeReference<int> calcTriangleCount = new NativeReference<int>(Allocator.TempJob);
-
-
-        NativeArray<int> textureIndexs = new NativeArray<int>(blockPositionsLength, Allocator.TempJob);
-
-        NativeArray<byte> cubeFacesActiveState = new NativeArray<byte>(blockPositionsLength * 6, Allocator.TempJob);
-
-
-        NativeArray<int3> neighborOffsetsAndNormals = new NativeArray<int3>(6, Allocator.TempJob);
-
-        neighborOffsetsAndNormals[0] = new int3(0, 0, 1);     // Z+
-        neighborOffsetsAndNormals[1] = new int3(0, 0, -1);    // Z-
-        neighborOffsetsAndNormals[2] = new int3(-1, 0, 0);    // X-
-        neighborOffsetsAndNormals[3] = new int3(1, 0, 0);     // X+
-        neighborOffsetsAndNormals[4] = new int3(0, 1, 0);     // Y+
-        neighborOffsetsAndNormals[5] = new int3(0, -1, 0);    // Y-
-
-
-        NativeArray<float3> cubeVertices = new NativeArray<float3>(8, Allocator.TempJob);
-
-        cubeVertices[0] = new float3(-0.5f, -0.5f, -0.5f);  // Vertex 0
-        cubeVertices[1] = new float3(0.5f, -0.5f, -0.5f);   // Vertex 1
-        cubeVertices[2] = new float3(0.5f, 0.5f, -0.5f);    // Vertex 2
-        cubeVertices[3] = new float3(-0.5f, 0.5f, -0.5f);   // Vertex 3
-        cubeVertices[4] = new float3(-0.5f, -0.5f, 0.5f);   // Vertex 4
-        cubeVertices[5] = new float3(0.5f, -0.5f, 0.5f);    // Vertex 5
-        cubeVertices[6] = new float3(0.5f, 0.5f, 0.5f);     // Vertex 6
-        cubeVertices[7] = new float3(-0.5f, 0.5f, 0.5f);    // Vertex 7
-
-
 
         GenerateMeshCubesJobParallel generateMeshCubesJob = new GenerateMeshCubesJobParallel
         {
@@ -449,8 +449,9 @@ public struct MeshCalculatorJob
 
     private static void ApplyMeshToObject(NativeArray<float3> vertices, NativeArray<int> triangles, NativeArray<byte> cubeFacesActiveState, NativeArray<int> textureIndexs, int atlasSize, Mesh mesh, MeshCollider coll)
     {
-        //NativeArray<float2> uvs = new NativeArray<float2>(vertices.Length, Allocator.TempJob);
-        //TextureCalculator.ScheduleUVGeneration(uvs, cubeFacesActiveState, textureIndexs, atlasSize);
+        NativeArray<float3> uvs = new NativeArray<float3>(vertices.Length, Allocator.TempJob);
+
+        TextureCalculator.ScheduleUVGeneration(uvs, cubeFacesActiveState, textureIndexs, atlasSize);
 
 
         if (vertices.Length > 65535)
@@ -460,7 +461,7 @@ public struct MeshCalculatorJob
 
         mesh.SetVertices(vertices);
         mesh.SetTriangles(triangles.ToArray(), 0);
-        //mesh.SetUVs(0, uvs);
+        mesh.SetUVs(0, uvs);
 
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
@@ -472,7 +473,7 @@ public struct MeshCalculatorJob
 
         coll.sharedMesh = mesh;
 
-        //uvs.Dispose();
+        uvs.Dispose();
     }
 
 }
