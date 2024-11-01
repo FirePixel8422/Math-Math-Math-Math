@@ -11,7 +11,7 @@ using UnityEngine;
 [BurstCompile]
 public static class TextureCalculator
 {
-    public static void ScheduleUVGeneration(NativeArray<float3> uvs, NativeArray<byte> cubeFacesActiveState, NativeArray<int> textureIndexs, int atlasSize)
+    public static void ScheduleUVGeneration(NativeArray<float3> uvs, NativeArray<float2> uv1s, NativeArray<byte> cubeFacesActiveState, NativeArray<int> textureIndexs, int atlasSize)
     {
         CalculateUvsJobParallel job = new CalculateUvsJobParallel
         {
@@ -19,6 +19,7 @@ public static class TextureCalculator
             textureIndexs = textureIndexs,
 
             uvs = uvs,
+            uvs1 = uv1s,
         };
 
         JobHandle handle = job.Schedule(textureIndexs.Length, textureIndexs.Length);
@@ -170,6 +171,9 @@ public static class TextureCalculator
         [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeArray<float3> uvs; // Output UVs
 
+        [NativeDisableParallelForRestriction]
+        [NoAlias][WriteOnly] public NativeArray<float2> uvs1; // Output UVs
+
         [NoAlias] private int cVertexIndex;
 
 
@@ -186,16 +190,17 @@ public static class TextureCalculator
 
                 if (cubeFacesActiveState[cubeIndex * 6 + cFaceIndex] == 1) // Only assign UVs if the face is active
                 {
-                    //uvs[0] = new float2(0, 0); 
-                    //uvs[1] = new float2(1, 0); 
-                    //uvs[2] = new float2(1, 1); 
-                    //uvs[3] = new float2(0, 1);
-                    //uvs[4] = new float2(1, 0); 
-                    //uvs[5] = new float2(0, 0); 
-                    //uvs[6] = new float2(0, 1); 
-                    //uvs[7] = new float2(1, 1); 
+                    textureIndexs[cubeIndex] = 1;
 
-                    textureIndexs[cubeIndex] = 2;
+                    float3[] targetUvs = new float3[8];
+                    targetUvs[0] = new float3(0, 0, textureIndexs[cubeIndex]);
+                    targetUvs[1] = new float3(1, 0, textureIndexs[cubeIndex]);
+                    targetUvs[2] = new float3(1, 1, textureIndexs[cubeIndex]);
+                    targetUvs[3] = new float3(0, 1, textureIndexs[cubeIndex]);
+                    targetUvs[4] = new float3(1, 0, textureIndexs[cubeIndex]);
+                    targetUvs[5] = new float3(0, 0, textureIndexs[cubeIndex]);
+                    targetUvs[6] = new float3(0, 1, textureIndexs[cubeIndex]);
+                    targetUvs[7] = new float3(1, 1, textureIndexs[cubeIndex]);
 
 
 
@@ -203,10 +208,10 @@ public static class TextureCalculator
                     {
                         case 0: // back
 
-                            uvs[cVertexIndex + 0] = new float3(0, 0, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 2] = new float3(1, 1, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 1] = new float3(1, 0, textureIndexs[cubeIndex]); 
-                            uvs[cVertexIndex + 3] = new float3(0, 1, textureIndexs[cubeIndex]);
+                            uvs[cVertexIndex + 0] = targetUvs[0];
+                            uvs[cVertexIndex + 2] = targetUvs[2];
+                            uvs[cVertexIndex + 1] = targetUvs[1]; 
+                            uvs[cVertexIndex + 3] = targetUvs[3];
 
                             addedVertices = 4;
 
@@ -214,10 +219,10 @@ public static class TextureCalculator
 
                         case 1: // front
 
-                            uvs[cVertexIndex + 4] = new float3(1, 0, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 5] = new float3(0, 0, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 6] = new float3(0, 1, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 7] = new float3(1, 1, textureIndexs[cubeIndex]);
+                            uvs[cVertexIndex + 4] = targetUvs[1];
+                            uvs[cVertexIndex + 5] = targetUvs[5];
+                            uvs[cVertexIndex + 6] = targetUvs[6];
+                            uvs[cVertexIndex + 7] = targetUvs[7];
 
                             addedVertices = 8;
 
@@ -225,10 +230,10 @@ public static class TextureCalculator
 
                         case 2: // right
 
-                            uvs[cVertexIndex + 1] = new float3(1, 0, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 6] = new float3(0, 1, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 2] = new float3(1, 1, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 5] = new float3(0, 0, textureIndexs[cubeIndex]);
+                            uvs[cVertexIndex + 1] = targetUvs[1];
+                            uvs[cVertexIndex + 6] = targetUvs[6];
+                            uvs[cVertexIndex + 2] = targetUvs[2];
+                            uvs[cVertexIndex + 5] = targetUvs[5];
 
                             addedVertices = 7;
 
@@ -236,10 +241,10 @@ public static class TextureCalculator
 
                         case 3: // left
 
-                            uvs[cVertexIndex + 0] = new float3(0, 0, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 7] = new float3(1, 1, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 4] = new float3(1, 0, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 3] = new float3(0, 1, textureIndexs[cubeIndex]);
+                            uvs[cVertexIndex + 0] = targetUvs[0];
+                            uvs[cVertexIndex + 7] = targetUvs[7];
+                            uvs[cVertexIndex + 4] = targetUvs[4];
+                            uvs[cVertexIndex + 3] = targetUvs[3];
 
                             addedVertices = 8;
 
@@ -247,10 +252,15 @@ public static class TextureCalculator
 
                         case 4: // top
 
-                            uvs[cVertexIndex + 3] = new float3(0, 1, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 6] = new float3(0, 1, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 2] = new float3(1, 1, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 7] = new float3(1, 1, textureIndexs[cubeIndex]);
+                            uvs1[cVertexIndex + 3] = new float2(0, 0);
+                            uvs1[cVertexIndex + 6] = new float2(1, 1);
+                            uvs1[cVertexIndex + 2] = new float2(1, 0);
+                            uvs1[cVertexIndex + 7] = new float2(0, 1);
+
+                            uvs[cVertexIndex + 3] = targetUvs[3];
+                            uvs[cVertexIndex + 6] = targetUvs[6];
+                            uvs[cVertexIndex + 2] = targetUvs[2];
+                            uvs[cVertexIndex + 7] = targetUvs[7];
 
                             addedVertices = 8;
 
@@ -258,10 +268,15 @@ public static class TextureCalculator
 
                         case 5: // bottom
 
-                            uvs[cVertexIndex + 0] = new float3(0, 0, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 5] = new float3(0, 0, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 1] = new float3(1, 0, textureIndexs[cubeIndex]);
-                            uvs[cVertexIndex + 4] = new float3(1, 0, textureIndexs[cubeIndex]);
+                            uvs1[cVertexIndex + 0] = new float2(0, 0);
+                            uvs1[cVertexIndex + 5] = new float2(1, 1);
+                            uvs1[cVertexIndex + 1] = new float2(1, 0);
+                            uvs1[cVertexIndex + 4] = new float2(0, 1);
+
+                            uvs[cVertexIndex + 0] = targetUvs[0];
+                            uvs[cVertexIndex + 5] = targetUvs[5];
+                            uvs[cVertexIndex + 1] = targetUvs[1];
+                            uvs[cVertexIndex + 4] = targetUvs[4];
 
                             addedVertices = 6;
 

@@ -24967,7 +24967,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   chunkPrefab: {fileID: 9132650834730868430, guid: f3cff2517c04bc84aa029eecc4670552, type: 3}
-  renderAmount: 200
+  renderAmount: 2
 --- !u!1001 &1425296617
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -38017,7 +38017,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7542816956783058893}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fcf5bcbe29e6b8f4b8ed18c6281dd836, type: 3}
   m_Name: 
@@ -38045,7 +38045,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!64 &7542816956783058894
 MeshCollider:
   m_ObjectHideFlags: 0
