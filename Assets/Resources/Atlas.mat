@@ -120,7 +120,7 @@ Material:
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
     - _Surface: 0
-    - _TextureId: 2
+    - _TextureId: 0
     - _UVSec: 0
     - _UseUVCalc: 0
     - _WorkflowMode: 1

@@ -47,7 +47,7 @@ public class ChunkManager : MonoBehaviour
     private static NativeHashMap<int3, ChunkData> chunks;
 
 
-
+    [BurstCompile]
     public void Init()
     {
         if (reSeedOnStart)
@@ -71,7 +71,10 @@ public class ChunkManager : MonoBehaviour
 
     public void AddChunksToQue(Chunk chunk)
     {
-        chunkList.Add(chunk);
+        if (chunkList.Contains(chunk) == false)
+        {
+            chunkList.Add(chunk);
+        }
     }
 
     [BurstCompile]
@@ -88,9 +91,13 @@ public class ChunkManager : MonoBehaviour
             {
                 for (int i = 0; i < chunkLoadCallsPerFrame; i++)
                 {
-                    chunkList[chunksLoaded].LoadChunk(chunkSize, bs.maxChunkHeight, seed, bs.scale, bs.octaves, bs.persistence, bs.lacunarity);
 
-                    chunks.TryAdd(chunkList[chunksLoaded].chunkData.gridPos, chunkList[chunksLoaded].chunkData);
+                    if (chunkList[chunksLoaded].chunkState == ChunkState.Unloaded)
+                    {
+                        chunkList[chunksLoaded].LoadChunk(chunkSize, bs.maxChunkHeight, seed, bs.scale, bs.octaves, bs.persistence, bs.lacunarity);
+
+                        chunks.TryAdd(chunkList[chunksLoaded].chunkData.gridPos, chunkList[chunksLoaded].chunkData);
+                    }
 
                     chunksLoaded += 1;
 
@@ -112,11 +119,14 @@ public class ChunkManager : MonoBehaviour
             {
                 for (int i = 0; i < chunkRenderCallsPerFrame; i++)
                 {
-                    chunkList[0].RenderChunk(atlasSize);
-
-                    chunkList.RemoveAt(0);
+                    if (chunkList[0].chunkState == ChunkState.Loaded && chunkList[0].isRenderEdgeChunk == false)
+                    {
+                        chunkList[0].RenderChunk(atlasSize);
+                    }
 
                     chunksRendered += 1;
+
+                    chunkList.RemoveAt(0);
 
                     if (chunkList.Count == 0)
                     {

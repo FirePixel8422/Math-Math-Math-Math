@@ -19,9 +19,16 @@ public class Chunk : MonoBehaviour
     public MeshCollider meshCollider;
 
 
-    private void Start()
+    public ChunkState chunkState;
+
+
+    public bool isRenderEdgeChunk;
+
+    public void Init(bool _isRenderEdgeChunk)
     {
         ChunkManager.Instance.AddChunksToQue(this);
+
+        isRenderEdgeChunk = _isRenderEdgeChunk;
     }
 
 
@@ -29,6 +36,8 @@ public class Chunk : MonoBehaviour
     [BurstCompile]
     public void LoadChunk(int chunkSize, int maxChunkHeight, int seed, float scale, int octaves, float persistence, float lacunarity)
     {
+        chunkState = ChunkState.Loaded;
+
         int3 worldPos = new int3((int)transform.position.x, 0, (int)transform.position.z);
         int3 gridPos = worldPos / chunkSize;
 
@@ -127,6 +136,8 @@ public class Chunk : MonoBehaviour
     [BurstCompile]
     public void RenderChunk(int atlasSize)
     {
+        chunkState = ChunkState.Rendered;
+
         MeshCalculatorJob.CallGenerateMeshJob(chunkData.gridPos, chunkData.blockPositions, atlasSize, meshFilter.mesh, meshCollider);
     }
 
@@ -350,3 +361,11 @@ public struct ChunkData
     public NativeArray<int3> blockPositions_Forward;
     public NativeArray<int3> blockPositions_Back;
 }
+
+
+public enum ChunkState
+{
+    Unloaded,
+    Loaded,
+    Rendered,
+};

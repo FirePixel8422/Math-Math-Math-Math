@@ -449,10 +449,10 @@ public struct MeshCalculatorJob
 
     private static void ApplyMeshToObject(NativeArray<float3> vertices, NativeArray<int> triangles, NativeArray<byte> cubeFacesActiveState, NativeArray<int> textureIndexs, int atlasSize, Mesh mesh, MeshCollider coll)
     {
-        NativeArray<float3> uvs = new NativeArray<float3>(vertices.Length, Allocator.TempJob);
-        NativeArray<float2> uv1s = new NativeArray<float2>(vertices.Length, Allocator.TempJob);
+        NativeArray<float4> uvs = new NativeArray<float4>(vertices.Length, Allocator.TempJob);
+        NativeArray<float2> textureData = new NativeArray<float2>(vertices.Length, Allocator.TempJob);
 
-        TextureCalculator.ScheduleUVGeneration(uvs, uv1s, cubeFacesActiveState, textureIndexs, atlasSize);
+        TextureCalculator.ScheduleUVGeneration(uvs, textureData, cubeFacesActiveState, textureIndexs, atlasSize);
 
 
         if (vertices.Length > 65535)
@@ -463,7 +463,7 @@ public struct MeshCalculatorJob
         mesh.SetVertices(vertices);
         mesh.SetTriangles(triangles.ToArray(), 0);
         mesh.SetUVs(0, uvs);
-        mesh.SetUVs(1, uv1s);
+        mesh.SetUVs(1, textureData);
 
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
@@ -476,7 +476,7 @@ public struct MeshCalculatorJob
         coll.sharedMesh = mesh;
 
         uvs.Dispose();
-        uv1s.Dispose();
+        textureData.Dispose();
     }
 
 }
