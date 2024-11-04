@@ -126,14 +126,14 @@ MonoBehaviour:
       z: 0
   meshFilter: {fileID: 5034534840836416473}
   meshCollider: {fileID: 4923432470865119043}
+  chunkState: 0
+  isRenderEdgeChunk: 0
   debugVerts: []
   debugTris: 
-  debugNormals: []
   blockDebug: []
   debugMode: 0
   drawMeshGizmos: 1
-  drawMeshVerticesGizmos: 1
-  drawMeshEdgesGizmos: 1
-  drawMeshNormalsGizmos: 0
+  drawMeshVerticesGizmos: 0
+  drawMeshEdgesGizmos: 0
   drawChunkGizmos: 0
   drawNeigbourConnectionsGizmos: 0

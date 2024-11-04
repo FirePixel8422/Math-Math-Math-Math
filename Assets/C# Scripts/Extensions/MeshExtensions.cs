@@ -322,7 +322,7 @@ public static class MeshExtensions
 
 
 
-    public static void CompactVertexListByPosition(ref NativeArray<float3> vertices, ref NativeArray<int> triangles, ref NativeArray<float2> uvs)
+    public static void CompactVertexListByPosition(ref NativeArray<float3> vertices, ref NativeArray<int> triangles, ref NativeArray<float4> uvs, ref NativeArray<float2> textureData)
     {
         int vertexCount = vertices.Length;
 
@@ -330,7 +330,9 @@ public static class MeshExtensions
 
         NativeArray<int> vertexMap = new NativeArray<int>(vertexCount, Allocator.TempJob);
         NativeArray<float3> newVertices = new NativeArray<float3>(vertexCount, Allocator.TempJob);
-        NativeArray<float2> newUvs = new NativeArray<float2>(vertexCount, Allocator.TempJob);
+
+        NativeArray<float4> newUvs = new NativeArray<float4>(vertexCount, Allocator.TempJob);
+        NativeArray<float2> newTextureData = new NativeArray<float2>(vertexCount, Allocator.TempJob);
 
 
         // Step 2: Setup and schedule the job
@@ -338,11 +340,13 @@ public static class MeshExtensions
         {
             vertices = vertices,
             uvs = uvs,
+            textureData = textureData,
 
             vertexMap = vertexMap,
 
             newVertices = newVertices,
             newUvs = newUvs,
+            newTextureData = newTextureData,
 
             endVertexCount = validVertexCount,
         };
@@ -359,10 +363,12 @@ public static class MeshExtensions
 
 
         vertices = new NativeArray<float3>(validVertexCount.Value, Allocator.TempJob);
-        uvs = new NativeArray<float2>(validVertexCount.Value, Allocator.TempJob); // New array for compacted normals
+        uvs = new NativeArray<float4>(validVertexCount.Value, Allocator.TempJob);
+        textureData = new NativeArray<float2>(validVertexCount.Value, Allocator.TempJob);
 
         NativeArray<float3>.Copy(newVertices, vertices, validVertexCount.Value);
-        NativeArray<float2>.Copy(newUvs, uvs, validVertexCount.Value);
+        NativeArray<float4>.Copy(newUvs, uvs, validVertexCount.Value);
+        NativeArray<float2>.Copy(newTextureData, textureData, validVertexCount.Value);
 
 
 
@@ -379,12 +385,14 @@ public static class MeshExtensions
     private struct CompactVerticesJobParallel : IJobParallelFor
     {
         [NoAlias][ReadOnly] public NativeArray<float3> vertices;
-        [NoAlias][ReadOnly] public NativeArray<float2> uvs;
+        [NoAlias][ReadOnly] public NativeArray<float4> uvs;
+        [NoAlias][ReadOnly] public NativeArray<float2> textureData;
 
         [NoAlias] public NativeArray<int> vertexMap;
 
         [NoAlias][WriteOnly] public NativeArray<float3> newVertices;
-        [NoAlias][WriteOnly] public NativeArray<float2> newUvs;
+        [NoAlias][WriteOnly] public NativeArray<float4> newUvs;
+        [NoAlias][WriteOnly] public NativeArray<float2> newTextureData;
 
         [NativeDisableParallelForRestriction]
         [NoAlias] public NativeReference<int> endVertexCount;
@@ -402,6 +410,7 @@ public static class MeshExtensions
 
                 newVertices[vertexMap[cVertex]] = vertices[cVertex];
                 newUvs[vertexMap[cVertex]] = uvs[cVertex];
+                newTextureData[vertexMap[cVertex]] = textureData[cVertex];
 
                 Interlocked.Add(ref vertexCount, 1);
             }

@@ -158,13 +158,11 @@ public class Chunk : MonoBehaviour
 
 
 #if UNITY_EDITOR
-    #region EditorOnly_Debug
 
     public Stopwatch sw;
 
     public Vector3[] debugVerts;
     public int[] debugTris;
-    public Vector3[] debugNormals;
     public List<int3> blockDebug = new List<int3>();
 
 
@@ -175,7 +173,6 @@ public class Chunk : MonoBehaviour
     public bool drawMeshGizmos;
     public bool drawMeshVerticesGizmos;
     public bool drawMeshEdgesGizmos;
-    public bool drawMeshNormalsGizmos;
     public bool drawChunkGizmos;
     public bool drawNeigbourConnectionsGizmos;
 
@@ -253,32 +250,6 @@ public class Chunk : MonoBehaviour
             }
         }
 
-        Gizmos.color = Color.blue;
-        if (drawMeshNormalsGizmos)
-        {
-            if (debugNormals.Length == 0)
-            {
-                debugNormals = meshFilter.mesh.normals;
-            }
-            else
-            {
-                meshFilter.mesh.normals = debugNormals;
-            }
-
-            Vector3 totalPositions = Vector3.zero;
-            for (int i = 0; i < debugTris.Length; i += 6)
-            {
-                for (int i2 = 0; i2 < 6; i2++)
-                {
-                    totalPositions += debugVerts[debugTris[i + i2]];
-                }
-
-                Vector3 linePos = totalPositions * 16666666666666666666666666666667f;
-
-                Gizmos.DrawLine(linePos, linePos + debugNormals[i]);
-            }
-        }
-
         Gizmos.color = Color.black;
         if (drawChunkGizmos)
         {
@@ -303,7 +274,8 @@ public class Chunk : MonoBehaviour
         Gizmos.color = Color.white;
         if (drawNeigbourConnectionsGizmos)
         {
-            NativeArray<int3> blockPositions = ChunkManager.GetConnectedChunkEdgePositionsCount(chunkData.gridPos);
+
+            NativeArray<int3> blockPositions = ChunkManager.GetConnectedChunkEdgePositionsCount(chunkData.gridPos, out _);
 
             foreach (int3 blockPosition in blockPositions)
             {
@@ -312,7 +284,6 @@ public class Chunk : MonoBehaviour
         }
     }
 
-    #endregion
 
 
 

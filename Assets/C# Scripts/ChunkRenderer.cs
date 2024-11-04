@@ -17,6 +17,7 @@ public class ChunkRenderer : MonoBehaviour
 
     private Vector3 lastPlayerPosition;
     private int chunkSize;
+    //private int halfChunkSize;
 
     private HashSet<Chunk> chunksList;
     private HashSet<int3> chunksPosList;
@@ -25,7 +26,9 @@ public class ChunkRenderer : MonoBehaviour
     [BurstCompile]
     private void Start()
     {
+        MeshCalculatorJob.Init();
         ChunkManager.Instance.Init();
+
         chunkSize = ChunkManager.Instance.chunkSize;
 
         chunksList = new HashSet<Chunk>();
@@ -50,9 +53,11 @@ public class ChunkRenderer : MonoBehaviour
     [BurstCompile]
     private void Update()
     {
-        if (Vector3.Distance(transform.position, lastPlayerPosition) > chunkSize)
+        Vector3 xzPos = new Vector3(transform.position.x, 0, transform.position.z);
+
+        if (Vector3.Distance(xzPos, lastPlayerPosition) > chunkSize)
         {
-            lastPlayerPosition = transform.position;
+            lastPlayerPosition = xzPos;
             CheckIfChunkIsWithinRenderDistance();
             DisableChunksOutsideRenderDistance();
         }
