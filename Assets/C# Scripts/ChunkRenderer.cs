@@ -45,7 +45,7 @@ public class ChunkRenderer : MonoBehaviour
             for (int z = -renderDistance; z <= renderDistance; z++)
             {
                 int3 initialChunkPosition = new int3(x * chunkSize, 0, z * chunkSize);
-                GenerateChunk(initialChunkPosition, x == -renderDistance || z == -renderDistance || x == renderDistance || z == renderDistance);
+                GenerateChunk(initialChunkPosition, (byte)((x == -renderDistance || z == -renderDistance || x == renderDistance || z == renderDistance) ? 1 : 0));
             }
         }
     }
@@ -64,12 +64,12 @@ public class ChunkRenderer : MonoBehaviour
     }
 
     [BurstCompile]
-    public void GenerateChunk(int3 position, bool isRenderEdgeChunk)
+    public void GenerateChunk(int3 position, byte isRenderEdgeChunk)
     {
         Chunk chunk = Instantiate(chunkPrefab, new Vector3(position.x, position.y, position.z), Quaternion.identity).GetComponent<Chunk>();
         chunk.Init(isRenderEdgeChunk);
 
-        if (isRenderEdgeChunk == false)
+        if (isRenderEdgeChunk == 0)
         {
             chunksList.Add(chunk);
             chunksPosList.Add(position);
@@ -90,7 +90,7 @@ public class ChunkRenderer : MonoBehaviour
 
                 if (!chunksPosList.Contains(chunkPosition))
                 {
-                    GenerateChunk(chunkPosition, x == -renderDistance || z == -renderDistance || x == renderDistance || z == renderDistance);
+                    GenerateChunk(chunkPosition, (byte)((x == -renderDistance || z == -renderDistance || x == renderDistance || z == renderDistance) ? 1 : 0));
                 }
             }
         }

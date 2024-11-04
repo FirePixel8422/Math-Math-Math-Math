@@ -11,7 +11,7 @@ using UnityEngine;
 [BurstCompile]
 public struct TextureCalculator
 {
-    public static void ScheduleUVGeneration(NativeArray<float4> uvs, NativeArray<float2> textureData, NativeArray<byte> cubeFacesActiveState, NativeArray<int> textureIndexs, int atlasSize)
+    public static void ScheduleUVGeneration(NativeArray<float4> uvs, NativeArray<float2> textureData, NativeArray<byte> cubeFacesActiveState, NativeArray<ushort> textureIndexs)
     {
         CalculateUvsJobParallel job = new CalculateUvsJobParallel
         {
@@ -33,7 +33,7 @@ public struct TextureCalculator
         [NativeDisableParallelForRestriction]
         [NoAlias][ReadOnly] public NativeArray<byte> cubeFacesActiveState;
 
-        [NoAlias]/*[ReadOnly]*/ public NativeArray<int> textureIndexs;
+        [NoAlias]/*[ReadOnly]*/ public NativeArray<ushort> textureIndexs;
 
         [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeArray<float4> uvs; // Output UVs

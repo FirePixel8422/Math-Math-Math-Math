@@ -1,15 +1,6 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Reflection;
 using Unity.Burst;
 using Unity.Collections;
-using Unity.Collections.LowLevel.Unsafe;
-using Unity.Entities;
 using Unity.Mathematics;
-using Unity.VisualScripting;
 using UnityEngine;
 
 [RequireComponent(typeof(MeshRenderer))]
@@ -51,7 +42,6 @@ public class MeshTester : MonoBehaviour
         CreateRandomMeshInBounds();
     }
 
-    public int3[] pos;
 
 
     [BurstCompile]
@@ -59,15 +49,15 @@ public class MeshTester : MonoBehaviour
     {
         if (randomSpawnAmount > 0)
         {
-            NativeList<int3> possiblePositions = new NativeList<int3>(spawnBounds.x * spawnBounds.y * spawnBounds.z, Allocator.Temp);
+            NativeList<BlockPos> possiblePositions = new NativeList<BlockPos>(spawnBounds.x * spawnBounds.y * spawnBounds.z, Allocator.Temp);
 
-            for (int x = 0; x < spawnBounds.x + 1; x++)
+            for (sbyte x = 0; x < ClampUnderMax(spawnBounds.x, 255) + 1; x++)
             {
-                for (int y = 0; y < spawnBounds.y + 1; y++)
+                for (byte y = 0; y < ClampUnderMax(spawnBounds.y + 1, 255); y++)
                 {
-                    for (int z = 0; z < spawnBounds.z + 1; z++)
+                    for (sbyte z = 0; z < ClampUnderMax(spawnBounds.z, 255) + 1; z++)
                     {
-                        possiblePositions.Add(new int3(x, y, z));
+                        possiblePositions.Add(new BlockPos(x, y, z));
                     }
                 }
             }
@@ -75,7 +65,7 @@ public class MeshTester : MonoBehaviour
 
             int calculatedAmount = Mathf.Min(randomSpawnAmount, possiblePositions.Length);
 
-            NativeArray<int3> blockPositions = new NativeArray<int3>(calculatedAmount, Allocator.TempJob);
+            NativeArray<BlockPos> blockPositions = new NativeArray<BlockPos>(calculatedAmount, Allocator.TempJob);
 
             for (int i = 0; i < calculatedAmount; i++)
             {
@@ -86,9 +76,19 @@ public class MeshTester : MonoBehaviour
 
             possiblePositions.Dispose();
 
-            pos = blockPositions.ToArray();
-
-            MeshCalculatorJob.CallGenerateMeshJob(int3.zero, blockPositions, atlasSize, meshFilter.mesh, GetComponent<MeshCollider>());
+            MeshCalculatorJob.CallGenerateMeshJob(int3.zero, ref blockPositions, meshFilter.mesh, GetComponent<MeshCollider>());
         }
+    }
+
+
+    [BurstCompile]
+    private int ClampUnderMax(int value, int max)
+    {
+        if (value > max)
+        {
+            value = max;
+        }
+
+        return value;
     }
 }

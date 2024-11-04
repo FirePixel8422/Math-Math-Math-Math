@@ -1,15 +1,9 @@
-using System;
-using System.Collections;
 using System.Diagnostics;
 using System.Threading;
 using Unity.Burst;
-using Unity.Burst.CompilerServices;
 using Unity.Collections;
-using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Mathematics;
-using Unity.VisualScripting;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -17,22 +11,19 @@ using UnityEngine.Rendering;
 [BurstCompile]
 public struct MeshCalculatorJob
 {
-    private static NativeArray<int3> neighborOffsets;
+    private static NativeArray<BlockPos> neighborOffsets;
     private static NativeArray<float3> cubeVertices;
 
     public static void Init()
     {
-        neighborOffsets = new NativeArray<int3>(6, Allocator.TempJob);
+        neighborOffsets = new NativeArray<BlockPos>(3, Allocator.Persistent);
 
-        neighborOffsets[0] = new int3(0, 0, 1);     // Z+
-        neighborOffsets[1] = new int3(0, 0, -1);    // Z-
-        neighborOffsets[2] = new int3(-1, 0, 0);    // X-
-        neighborOffsets[3] = new int3(1, 0, 0);     // X+
-        neighborOffsets[4] = new int3(0, 1, 0);     // Y+
-        neighborOffsets[5] = new int3(0, -1, 0);    // Y-
+        neighborOffsets[0] = new BlockPos(1, 0, 0);     // X
+        neighborOffsets[1] = new BlockPos(0, 1, 0);     // Y
+        neighborOffsets[2] = new BlockPos(0, 0, 1);     // Z
 
 
-        cubeVertices = new NativeArray<float3>(8, Allocator.TempJob);
+        cubeVertices = new NativeArray<float3>(8, Allocator.Persistent);
 
         cubeVertices[0] = new float3(-0.5f, -0.5f, -0.5f);  // Vertex 0
         cubeVertices[1] = new float3(0.5f, -0.5f, -0.5f);   // Vertex 1
@@ -46,7 +37,7 @@ public struct MeshCalculatorJob
 
 
 
-    public static void CallGenerateMeshJob(int3 chunkGridPos, NativeArray<int3> blockPositions, int atlasSize, Mesh mesh, MeshCollider coll)
+    public static void CallGenerateMeshJob(int3 chunkGridPos, ref NativeArray<BlockPos> blockPositions, Mesh mesh, MeshCollider coll)
     {
         #region Data Creation
 
@@ -54,16 +45,17 @@ public struct MeshCalculatorJob
 
         int blockPositionsLength = blockPositions.Length;
 
-        NativeHashMap<int3, byte> blockPositionsMap = new NativeHashMap<int3, byte>(blockPositionsLength, Allocator.TempJob);
+        NativeHashMap<BlockPos, byte> blockPositionsMap = new NativeHashMap<BlockPos, byte>(blockPositionsLength, Allocator.TempJob);
+
+
+        NativeReference<int2> calcVertexTriangleCount = new NativeReference<int2>(Allocator.TempJob);
 
         NativeArray<float3> vertices = new NativeArray<float3>(blockPositionsLength * 8, Allocator.TempJob);
-        NativeReference<int> calcVertexCount = new NativeReference<int>(Allocator.TempJob);
 
         NativeArray<int> triangles = new NativeArray<int>(blockPositionsLength * 36, Allocator.TempJob);
-        NativeReference<int> calcTriangleCount = new NativeReference<int>(Allocator.TempJob);
 
 
-        NativeArray<int> textureIndexs = new NativeArray<int>(blockPositionsLength, Allocator.TempJob);
+        NativeArray<ushort> textureIndexs = new NativeArray<ushort>(blockPositionsLength, Allocator.TempJob);
 
         NativeArray<byte> cubeFacesActiveState = new NativeArray<byte>(blockPositionsLength * 6, Allocator.TempJob);
 
@@ -82,7 +74,6 @@ public struct MeshCalculatorJob
         };
 
         mainJobHandle = setupDataJobParallel.Schedule(blockPositionsLength, blockPositionsLength);
-
         #endregion
         //7000 ticks
 
@@ -90,8 +81,7 @@ public struct MeshCalculatorJob
 
         #region Calculate ConnectedChunks Edge Positions Job
 
-        NativeArray<int3> connectedChunkEdgePositions = ChunkManager.GetConnectedChunkEdgePositionsCount(chunkGridPos, out JobHandle edgesJobHandle);
-
+        NativeArray<BlockPos> connectedChunkEdgePositions = ChunkManager.GetConnectedChunkEdgePositionsCount(chunkGridPos, out JobHandle edgesJobHandle);
 
         sw = Stopwatch.StartNew();
         AddArrayToHashMapJobParallel calculateChunkConnectionsJobParallel = new AddArrayToHashMapJobParallel
@@ -104,9 +94,8 @@ public struct MeshCalculatorJob
         mainJobHandle = JobHandle.CombineDependencies(mainJobHandle, calculateChunkConnectionsJobParallel.Schedule(connectedChunkEdgePositions.Length, connectedChunkEdgePositions.Length, mainJobHandle));
 
         #endregion
+
         //210 ticks for adding connected chunk edges
-        UnityEngine.Debug.Log(sw.ElapsedTicks + " ticks for adding connected chunk edges");
-        sw = Stopwatch.StartNew();
 
 
 
@@ -118,11 +107,9 @@ public struct MeshCalculatorJob
             blockPositions = blockPositions,
             blockPositionsMap = blockPositionsMap,
 
+            calcVertexTriangleCount = calcVertexTriangleCount,
             vertices = vertices,
-            calcVertexCount = calcVertexCount,
-
             triangles = triangles,
-            calcTriangleCount = calcTriangleCount,
 
             cubeFacesActiveState = cubeFacesActiveState,
 
@@ -134,33 +121,28 @@ public struct MeshCalculatorJob
         mainJobHandle.Complete();
 
         #endregion
-
-        UnityEngine.Debug.Log(sw.ElapsedTicks + " ticks for Calculating verts, tris, facesAtciveState, textureIndexs");
-        sw = Stopwatch.StartNew();
+        //1000 ticks for Calculating verts, tris, facesAtciveState, textureIndexs
 
 
 
 
         #region Filter Vertices, Triangles and Normals, then apply call ApplyMeshToObject
 
-        NativeArray<float3> filteredVertices = new NativeArray<float3>(calcVertexCount.Value, Allocator.TempJob);
-        NativeArray<int> filteredTriangles = new NativeArray<int>(calcTriangleCount.Value, Allocator.TempJob);
+        NativeArray<float3> filteredVertices = new NativeArray<float3>(calcVertexTriangleCount.Value.x, Allocator.TempJob);
+        NativeArray<int> filteredTriangles = new NativeArray<int>(calcVertexTriangleCount.Value.y, Allocator.TempJob);
 
 
-        NativeArray<float3>.Copy(vertices, filteredVertices, calcVertexCount.Value);
-        NativeArray<int>.Copy(triangles, filteredTriangles, calcTriangleCount.Value);
+        NativeArray<float3>.Copy(vertices, filteredVertices, calcVertexTriangleCount.Value.x);
+        NativeArray<int>.Copy(triangles, filteredTriangles, calcVertexTriangleCount.Value.y);
 
         vertices.Dispose();
         triangles.Dispose();
+        calcVertexTriangleCount.Dispose();
 
-        calcVertexCount.Dispose();
-        calcTriangleCount.Dispose();
-
-        UnityEngine.Debug.Log(sw.ElapsedTicks + " ticks for filtering verts and tris");
-        sw = Stopwatch.StartNew();
+        //8000 ticks for filtering verts and tris
 
 
-        ApplyMeshToObject(filteredVertices, filteredTriangles, cubeFacesActiveState, textureIndexs, atlasSize, mesh, coll);
+        ApplyMeshToObject(filteredVertices, filteredTriangles, cubeFacesActiveState, textureIndexs, mesh, coll);
 
         #endregion
 
@@ -192,14 +174,15 @@ public struct MeshCalculatorJob
     [BurstCompile]
     private struct AddArrayToHashMapJobParallel : IJobParallelFor
     {
-        [NoAlias][ReadOnly] public NativeArray<int3> blockPositions;
+        [NoAlias][ReadOnly] public NativeArray<BlockPos> blockPositions;
 
         [NativeDisableParallelForRestriction]
-        [NoAlias][WriteOnly] public NativeHashMap<int3, byte> blockPositionsMap;
+        [NoAlias][WriteOnly] public NativeHashMap<BlockPos, byte> blockPositionsMap;
 
         public void Execute(int index)
         {
-            int3 gridPosition = blockPositions[index];
+            BlockPos gridPosition = blockPositions[index];
+
             blockPositionsMap.TryAdd(gridPosition, 0);
         }
     }
@@ -210,9 +193,13 @@ public struct MeshCalculatorJob
     [BurstCompile]
     private struct GenerateMeshCubesJobParallel : IJobParallelFor
     {
-        [NoAlias][ReadOnly] public NativeArray<int3> blockPositions;
+        [NoAlias][ReadOnly] public NativeArray<BlockPos> blockPositions;
 
-        [NoAlias][ReadOnly] public NativeHashMap<int3, byte> blockPositionsMap;
+        [NoAlias][ReadOnly] public NativeHashMap<BlockPos, byte> blockPositionsMap;
+
+
+        [NativeDisableParallelForRestriction]
+        [NoAlias][WriteOnly] public NativeReference<int2> calcVertexTriangleCount;
 
         [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeArray<float3> vertices;
@@ -224,14 +211,9 @@ public struct MeshCalculatorJob
         [NoAlias][WriteOnly] public NativeArray<byte> cubeFacesActiveState;
 
 
-        [NativeDisableParallelForRestriction]
-        [NoAlias][WriteOnly] public NativeReference<int> calcVertexCount;
-
-        [NativeDisableParallelForRestriction]
-        [NoAlias][WriteOnly] public NativeReference<int> calcTriangleCount;
 
 
-        [NoAlias][ReadOnly] public NativeArray<int3> neighborOffsets;
+        [NoAlias][ReadOnly] public NativeArray<BlockPos> neighborOffsets;
         [NoAlias][ReadOnly] public NativeArray<float3> cubeVertices;
 
 
@@ -242,41 +224,21 @@ public struct MeshCalculatorJob
         [BurstCompile]
         public void Execute(int cubeIndex)
         {
-            byte frontFaceVisible, backFaceVisible, leftFaceVisible, rightFaceVisible, topFaceVisible, bottomFaceVisible;
+            int3 cubePosition = blockPositions[cubeIndex].ToInt3();
 
-            int3 cubePosition = blockPositions[cubeIndex];
-
-            int3 neighborPositionZPlus = cubePosition + neighborOffsets[0];      // Z+
-            int3 neighborPositionZMinus = cubePosition + neighborOffsets[1];    // Z-
-            int3 neighborPositionXMinus = cubePosition + neighborOffsets[2];    // X-
-            int3 neighborPositionXPlus = cubePosition + neighborOffsets[3];     // X+
-            int3 neighborPositionYPlus = cubePosition + neighborOffsets[4];     // Y+
-            int3 neighborPositionYMinus = cubePosition + neighborOffsets[5];    // Y-
-
-            // Use the NativeHashMap to check neighbor visibility
-            frontFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionZPlus) ? 0 : 1);
-            backFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionZMinus) ? 0 : 1);
-            leftFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionXMinus) ? 0 : 1);
-            rightFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionXPlus) ? 0 : 1);
-            topFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionYPlus) ? 0 : 1);
-            bottomFaceVisible = (byte)(blockPositionsMap.ContainsKey(neighborPositionYMinus) ? 0 : 1);
+            BlockPos neighborPositionXPlus  = new BlockPos((sbyte)(cubePosition.x + 1), (byte)cubePosition.y,       (sbyte)cubePosition.z);
+            BlockPos neighborPositionXMinus = new BlockPos((sbyte)(cubePosition.x - 1), (byte)cubePosition.y,       (sbyte)cubePosition.z);
+            BlockPos neighborPositionYPlus  = new BlockPos((sbyte)cubePosition.x,       (byte)(cubePosition.y + 1), (sbyte)cubePosition.z);
+            BlockPos neighborPositionYMinus = new BlockPos((sbyte)cubePosition.x,       (byte)(cubePosition.y - 1), (sbyte)cubePosition.z);
+            BlockPos neighborPositionZPlus  = new BlockPos((sbyte)cubePosition.x,       (byte)cubePosition.y,       (sbyte)(cubePosition.z + 1));
+            BlockPos neighborPositionZMinus = new BlockPos((sbyte)cubePosition.x,       (byte)cubePosition.y,       (sbyte)(cubePosition.z - 1));
 
 
-            if (frontFaceVisible == 0 && backFaceVisible == 0 && leftFaceVisible == 0 && rightFaceVisible == 0 && bottomFaceVisible == 0 && topFaceVisible == 0)
-            {
-                // Skip this cube entirely if no faces are visible
 
-                if (cubeIndex == (blockPositions.Length - 1))
-                {
-                    FinilizeJobData();
-                }
-                return;
-            }
 
 
             int addedTriangles = 0;
             int addedVertices = 0;
-
 
             int cCubeActiveStateIndex = cubeIndex * 6; // 6 faces for each cube
 
@@ -284,7 +246,7 @@ public struct MeshCalculatorJob
             #region Add face vertices and triangles if the face is visible
 
             // Back face
-            if (backFaceVisible == 1)
+            if (blockPositionsMap.ContainsKey(neighborPositionZMinus) == false)
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 0] = 1;
 
@@ -307,7 +269,7 @@ public struct MeshCalculatorJob
             }
 
             // Front face
-            if (frontFaceVisible == 1)
+            if (blockPositionsMap.ContainsKey(neighborPositionZPlus) == false)
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 1] = 1;
 
@@ -331,7 +293,7 @@ public struct MeshCalculatorJob
             }
 
             // Right face
-            if (rightFaceVisible == 1)
+            if (blockPositionsMap.ContainsKey(neighborPositionXPlus) == false)
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 2] = 1;
 
@@ -355,7 +317,7 @@ public struct MeshCalculatorJob
             }
 
             // Left face
-            if (leftFaceVisible == 1)
+            if (blockPositionsMap.ContainsKey(neighborPositionXMinus) == false)
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 3] = 1;
 
@@ -379,7 +341,7 @@ public struct MeshCalculatorJob
             }
 
             // Top face
-            if (topFaceVisible == 1)
+            if (blockPositionsMap.ContainsKey(neighborPositionYPlus) == false)
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 4] = 1;
 
@@ -403,7 +365,7 @@ public struct MeshCalculatorJob
             }
 
             // Bottom face
-            if (bottomFaceVisible == 1 && cubePosition.y != 0)
+            if ((blockPositionsMap.ContainsKey(neighborPositionYMinus) == false) && cubePosition.y != 0)
             {
                 cubeFacesActiveState[cCubeActiveStateIndex + 5] = 1;
 
@@ -443,8 +405,7 @@ public struct MeshCalculatorJob
 
         private void FinilizeJobData()
         {
-            calcVertexCount.Value = cVertexIndex;
-            calcTriangleCount.Value = cTriangleIndex;
+            calcVertexTriangleCount.Value = new int2(cVertexIndex, cTriangleIndex);
         }
     }
 
@@ -452,14 +413,14 @@ public struct MeshCalculatorJob
 
     public static Stopwatch sw;
 
-    private static void ApplyMeshToObject(NativeArray<float3> vertices, NativeArray<int> triangles, NativeArray<byte> cubeFacesActiveState, NativeArray<int> textureIndexs, int atlasSize, Mesh mesh, MeshCollider coll)
+    private static void ApplyMeshToObject(NativeArray<float3> vertices, NativeArray<int> triangles, NativeArray<byte> cubeFacesActiveState, NativeArray<ushort> textureIndexs, Mesh mesh, MeshCollider coll)
     {
         NativeArray<float4> uvs = new NativeArray<float4>(vertices.Length, Allocator.TempJob);
         NativeArray<float2> textureData = new NativeArray<float2>(vertices.Length, Allocator.TempJob);
         //4500 ticks
 
 
-        TextureCalculator.ScheduleUVGeneration(uvs, textureData, cubeFacesActiveState, textureIndexs, atlasSize);
+        TextureCalculator.ScheduleUVGeneration(uvs, textureData, cubeFacesActiveState, textureIndexs);
         //9000 ticks
 
 
