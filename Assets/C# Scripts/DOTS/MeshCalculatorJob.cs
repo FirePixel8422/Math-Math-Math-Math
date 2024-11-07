@@ -11,18 +11,11 @@ using UnityEngine.Rendering;
 [BurstCompile]
 public struct MeshCalculatorJob
 {
-    private static NativeArray<BlockPos> neighborOffsets;
     private static NativeArray<float3> cubeVertices;
+    public static Stopwatch sw;
 
     public static void Init()
     {
-        neighborOffsets = new NativeArray<BlockPos>(3, Allocator.Persistent);
-
-        neighborOffsets[0] = new BlockPos(1, 0, 0);     // X
-        neighborOffsets[1] = new BlockPos(0, 1, 0);     // Y
-        neighborOffsets[2] = new BlockPos(0, 0, 1);     // Z
-
-
         cubeVertices = new NativeArray<float3>(8, Allocator.Persistent);
 
         cubeVertices[0] = new float3(-0.5f, -0.5f, -0.5f);  // Vertex 0
@@ -83,7 +76,6 @@ public struct MeshCalculatorJob
 
         NativeArray<BlockPos> connectedChunkEdgePositions = ChunkManager.GetConnectedChunkEdgePositionsCount(chunkGridPos, out JobHandle edgesJobHandle);
 
-        sw = Stopwatch.StartNew();
         AddArrayToHashMapJobParallel calculateChunkConnectionsJobParallel = new AddArrayToHashMapJobParallel
         {
             blockPositions = connectedChunkEdgePositions,
@@ -113,38 +105,62 @@ public struct MeshCalculatorJob
 
             cubeFacesActiveState = cubeFacesActiveState,
 
-            neighborOffsets = neighborOffsets,
             cubeVertices = cubeVertices,
         };
 
         mainJobHandle = generateMeshCubesJob.Schedule(blockPositionsLength, blockPositionsLength, mainJobHandle);
+
         mainJobHandle.Complete();
 
         #endregion
+
         //1000 ticks for Calculating verts, tris, facesAtciveState, textureIndexs
 
 
 
 
-        #region Filter Vertices, Triangles and Normals, then apply call ApplyMeshToObject
+        #region Filter Vertices And Triangles, then apply call ApplyMeshToObject
 
-        NativeArray<float3> filteredVertices = new NativeArray<float3>(calcVertexTriangleCount.Value.x, Allocator.TempJob);
-        NativeArray<int> filteredTriangles = new NativeArray<int>(calcVertexTriangleCount.Value.y, Allocator.TempJob);
+        int calcVertexCount = calcVertexTriangleCount.Value.x;
+        NativeArray<float3> filteredVertices = new NativeArray<float3>(calcVertexCount, Allocator.TempJob);
+
+        FilterVerticesJobParallel filterVerticesJob = new FilterVerticesJobParallel
+        {
+            vertices = vertices,
+            filterdVertices = filteredVertices,
+        };
+
+        int calcTriangleCount = calcVertexTriangleCount.Value.y;
+        NativeArray<int> filteredTriangles = new NativeArray<int>(calcTriangleCount, Allocator.TempJob);
+
+        FilterTrianglesJobParallel filterTrianglesJob = new FilterTrianglesJobParallel
+        {
+            triangles = triangles,
+            filterdTriangles = filteredTriangles,
+        };
 
 
-        NativeArray<float3>.Copy(vertices, filteredVertices, calcVertexTriangleCount.Value.x);
-        NativeArray<int>.Copy(triangles, filteredTriangles, calcVertexTriangleCount.Value.y);
+        mainJobHandle = filterVerticesJob.Schedule(calcVertexCount, calcVertexCount);
+        mainJobHandle = JobHandle.CombineDependencies(filterTrianglesJob.Schedule(calcTriangleCount, calcTriangleCount), mainJobHandle);
 
+
+        mainJobHandle.Complete();
+
+
+        calcVertexTriangleCount.Dispose();
         vertices.Dispose();
         triangles.Dispose();
-        calcVertexTriangleCount.Dispose();
 
         //8000 ticks for filtering verts and tris
 
+        #endregion
+
+        //750 ticks for filtering tris and verts
+
+
+
 
         ApplyMeshToObject(filteredVertices, filteredTriangles, cubeFacesActiveState, textureIndexs, mesh, coll);
-
-        #endregion
 
 
 
@@ -212,8 +228,6 @@ public struct MeshCalculatorJob
 
 
 
-
-        [NoAlias][ReadOnly] public NativeArray<BlockPos> neighborOffsets;
         [NoAlias][ReadOnly] public NativeArray<float3> cubeVertices;
 
 
@@ -411,8 +425,42 @@ public struct MeshCalculatorJob
 
 
 
-    public static Stopwatch sw;
 
+    [BurstCompile]
+    private struct FilterVerticesJobParallel : IJobParallelFor
+    {
+        [NoAlias][ReadOnly] public NativeArray<float3> vertices;
+
+        [NativeDisableParallelForRestriction]
+        [NoAlias][WriteOnly] public NativeArray<float3> filterdVertices;
+
+
+        [BurstCompile]
+        public void Execute(int index)
+        {
+            filterdVertices[index] = vertices[index];
+        }
+    }
+
+    [BurstCompile]
+    private struct FilterTrianglesJobParallel : IJobParallelFor
+    {
+        [NoAlias][ReadOnly] public NativeArray<int> triangles;
+
+        [NativeDisableParallelForRestriction]
+        [NoAlias][WriteOnly] public NativeArray<int> filterdTriangles;
+
+
+        [BurstCompile]
+        public void Execute(int index)
+        {
+            filterdTriangles[index] = triangles[index];
+        }
+    }
+
+
+
+    
     private static void ApplyMeshToObject(NativeArray<float3> vertices, NativeArray<int> triangles, NativeArray<byte> cubeFacesActiveState, NativeArray<ushort> textureIndexs, Mesh mesh, MeshCollider coll)
     {
         NativeArray<float4> uvs = new NativeArray<float4>(vertices.Length, Allocator.TempJob);
@@ -440,9 +488,6 @@ public struct MeshCalculatorJob
         mesh.SetSubMesh(0, new SubMeshDescriptor(0, triangles.Length));
 
         mesh.RecalculateBounds();
-        mesh.RecalculateNormals();
-
-        mesh.tangents = null;
 
         mesh.SetUVs(0, uvs);
         mesh.SetUVs(1, textureData);

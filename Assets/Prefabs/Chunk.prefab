@@ -131,8 +131,8 @@ MonoBehaviour:
   debugVerts: []
   debugTris: 
   blockDebug: []
-  debugMode: 0
-  drawMeshGizmos: 1
+  debugMode: 1
+  drawMeshGizmos: 0
   drawMeshVerticesGizmos: 0
   drawMeshEdgesGizmos: 0
   drawChunkGizmos: 0

@@ -6,7 +6,6 @@ using UnityEngine;
 public class SpawnChunksConfigAuthoring : MonoBehaviour
 {
     public GameObject chunkPrefab;
-    public int amount;
 
 
     public class Baker : Baker<SpawnChunksConfigAuthoring>
@@ -18,7 +17,6 @@ public class SpawnChunksConfigAuthoring : MonoBehaviour
             AddComponent(entity, new SpawnChunksConfig
             {
                 chunkPrefabEntity = GetEntity(authoring.chunkPrefab, TransformUsageFlags.None),
-                amount = authoring.amount,
             });
         }
     }
@@ -27,5 +25,4 @@ public class SpawnChunksConfigAuthoring : MonoBehaviour
 public struct SpawnChunksConfig : IComponentData
 {
     public Entity chunkPrefabEntity;
-    public int amount;
 }

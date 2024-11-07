@@ -1,9 +1,17 @@
-using System.Collections;
+using System;
 using System.Collections.Generic;
 using Unity.Burst;
-using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
+
+
+public enum LivingState : byte
+{
+    dead = 4,
+    undead,
+    living,
+    soul,
+}
 
 
 [BurstCompile]
@@ -22,10 +30,15 @@ public class ChunkRenderer : MonoBehaviour
     private HashSet<Chunk> chunksList;
     private HashSet<int3> chunksPosList;
 
-
+    LivingState state;
     [BurstCompile]
     private void Start()
     {
+        state = LivingState.dead | LivingState.undead;
+        if (state.HasFlag(LivingState.dead))
+        {
+            print("gudshit");
+        }
         MeshCalculatorJob.Init();
         ChunkManager.Instance.Init();
 
@@ -36,6 +49,7 @@ public class ChunkRenderer : MonoBehaviour
 
         GenerateInitialChunks();
     }
+
 
     [BurstCompile]
     private void GenerateInitialChunks()

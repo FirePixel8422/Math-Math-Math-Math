@@ -217,7 +217,7 @@ public class ChunkManager : MonoBehaviour
 
                 blockPositions = neighbourBlockPositions[3],
 
-                dirModifier = new BlockPos((sbyte)-staticChunkSize, 0, 0),
+                dirModifier = new BlockPos((sbyte)(-staticChunkSize * 2), 0, (sbyte)-staticChunkSize),
 
                 chunkSize = staticChunkSize,
             };
@@ -238,7 +238,7 @@ public class ChunkManager : MonoBehaviour
 
                 startIndex = startIndex,
 
-                dirModifier = new BlockPos(staticChunkSize, 0, 0),
+                dirModifier = new BlockPos(0, 0, (sbyte)-staticChunkSize),
 
                 chunkSize = staticChunkSize,
             };
@@ -259,7 +259,7 @@ public class ChunkManager : MonoBehaviour
 
                 startIndex = startIndex,
 
-                dirModifier = new BlockPos(0, 0, (sbyte)-staticChunkSize),
+                dirModifier = new BlockPos((sbyte)-staticChunkSize, 0, (sbyte)(-staticChunkSize * 2)),
 
                 chunkSize = staticChunkSize,
             };
@@ -280,7 +280,7 @@ public class ChunkManager : MonoBehaviour
 
                 startIndex = startIndex,
 
-                dirModifier = new BlockPos(0, 0, staticChunkSize),
+                dirModifier = new BlockPos((sbyte)-staticChunkSize, 0, 0),
 
                 chunkSize = staticChunkSize,
             };
@@ -314,13 +314,7 @@ public class ChunkManager : MonoBehaviour
         [BurstCompile]
         public void Execute(int index)
         {
-            connectedChunkEdgePositions[startIndex + index] = new BlockPos((sbyte)(blockPositions[index].x + dirModifier.x - chunkSize), blockPositions[index].y, (sbyte)(blockPositions[index].z + dirModifier.z - chunkSize));
+            connectedChunkEdgePositions[startIndex + index] = new BlockPos((sbyte)(blockPositions[index].x + dirModifier.x), blockPositions[index].y, (sbyte)(blockPositions[index].z + dirModifier.z));
         }
     }
-
-
-
-
-    public BlockPos[] l;
-    public BlockPos[] l2;
 }

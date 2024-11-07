@@ -4,6 +4,7 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Mathematics;
 using System.Diagnostics;
+using System.Collections;
 
 
 
@@ -16,7 +17,6 @@ public class Chunk : MonoBehaviour
 
     public MeshFilter meshFilter;
     public MeshCollider meshCollider;
-
 
     public ChunkState chunkState;
 
@@ -330,8 +330,15 @@ public struct ChunkData
     }
 }
 
+public enum Blocks : byte
+{
+    dirt = 1,
+    oak =2,
 
-public enum ChunkState
+birch = 3
+}
+
+public enum ChunkState : byte
 {
     Unloaded,
     Loaded,

@@ -432,7 +432,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   chunkPrefab: {fileID: 9132650834730868430, guid: f3cff2517c04bc84aa029eecc4670552, type: 3}
-  renderDistance: 15
+  renderDistance: 32
 --- !u!1 &963194225
 GameObject:
   m_ObjectHideFlags: 0
@@ -607,9 +607,7 @@ MonoBehaviour:
   chunkSize: 16
   seed: 7
   reSeedOnStart: 0
-  bs: {fileID: 11400000, guid: 7f84e48d9eae74c42a1efc96c76acd2a, type: 2}
-  l: []
-  l2: []
+  bs: {fileID: 11400000, guid: 2dd397c3a55890a4094d48d24bb16c0b, type: 2}
 --- !u!4 &1407568655
 Transform:
   m_ObjectHideFlags: 0
