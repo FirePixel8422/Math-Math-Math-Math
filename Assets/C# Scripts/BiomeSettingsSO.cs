@@ -8,7 +8,7 @@ public class BiomeSettingsSO : ScriptableObject
 {
     public byte maxChunkHeight;
     public float scale;
-    public int octaves;
+    public byte octaves;
     public float persistence;
     public float lacunarity;
 }

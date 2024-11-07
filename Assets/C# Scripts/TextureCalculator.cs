@@ -47,7 +47,7 @@ public struct TextureCalculator
 
 
         [BurstCompile]
-        public void Execute(int cubeIndex)
+        public void Execute(int blockIndex)
         {
             int addedVertices = 0;
 
@@ -55,9 +55,9 @@ public struct TextureCalculator
             for (int cFaceIndex = 0; cFaceIndex < 6; cFaceIndex++)
             {
 
-                if (cubeFacesActiveState[cubeIndex * 6 + cFaceIndex] == 1) // Only assign UVs if the face is active
+                if (cubeFacesActiveState[blockIndex * 6 + cFaceIndex] == 1) // Only assign UVs if the face is active
                 {
-                    textureIndexs[cubeIndex] = 1;
+                    textureIndexs[blockIndex] = 1;
 
                     //float4[] targetUvs = new float4[8];
                     //targetUvs[0] = new float4(0, 0, 0, 0);
@@ -144,7 +144,7 @@ public struct TextureCalculator
 
             for (int i = 0; i < addedVertices; i++)
             {
-                textureData[cVertexIndex + i] = new float2(textureIndexs[cubeIndex], 0);
+                textureData[cVertexIndex + i] = new float2(textureIndexs[blockIndex], 0);
             }
 
             Interlocked.Add(ref cVertexIndex, addedVertices);

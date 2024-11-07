@@ -8,7 +8,7 @@ using UnityEngine;
 public struct NoiseMapJob
 {
 
-    public static NativeArray<byte> GenerateNoiseMap(int resolution, int maxHeight, int seed, float scale, int octaves, float lacunarity, float persistence, int2 offset)
+    public static NativeArray<byte> GenerateNoiseMap(int resolution, byte maxHeight, int seed, float scale, byte octaves, float lacunarity, float persistence, int2 offset)
     {
         NativeArray<byte> noiseMap = new NativeArray<byte>(resolution * resolution, Allocator.TempJob);
 
@@ -42,8 +42,8 @@ public struct NoiseMapJob
         [NoAlias][ReadOnly] public int resolution;
         [NoAlias][ReadOnly] public int seed;
         [NoAlias][ReadOnly] public float scale;
-        [NoAlias][ReadOnly] public float maxHeight;
-        [NoAlias][ReadOnly] public int octaves;
+        [NoAlias][ReadOnly] public byte maxHeight;
+        [NoAlias][ReadOnly] public byte octaves;
         [NoAlias][ReadOnly] public float lacunarity;
         [NoAlias][ReadOnly] public float persistence;
         [NoAlias][ReadOnly] public int2 offset;
@@ -59,11 +59,11 @@ public struct NoiseMapJob
             int z = index % resolution;
 
             // Calculate Perlin noise height for the current (x, z) position
-            noiseMap[x * resolution + z] = CalculatePerlinNoiseHeight(x + offset.x, z + offset.y, resolution, seed, scale, octaves, lacunarity, persistence);
+            noiseMap[x * resolution + z] = CalculatePerlinNoiseHeight(x + offset.x, z + offset.y, resolution, seed, scale, maxHeight, octaves, lacunarity, persistence);
         }
 
         [BurstCompile]
-        private byte CalculatePerlinNoiseHeight(float worldPosX, float worldPosZ, int resolution, int seed, float scale, int octaves, float lacunarity, float persistence)
+        private byte CalculatePerlinNoiseHeight(float worldPosX, float worldPosZ, int resolution, int seed, float scale, byte maxHeight, byte octaves, float lacunarity, float persistence)
         {
             float noiseHeight = 0;
             float frequency = 1;
@@ -86,7 +86,20 @@ public struct NoiseMapJob
                 frequency *= lacunarity;
             }
             noiseHeight /= maxPossibleHeight;
-            return (byte)(noiseHeight * maxHeight);
+            return ClampUnderMax((byte)(noiseHeight * maxHeight), maxHeight);
+        }
+
+
+        [BurstCompile]
+        private byte ClampUnderMax(byte value, byte max)
+        {
+            //clamp and data limit
+            if (value > max || value > byte.MaxValue)
+            {
+                value = max;
+            }
+
+            return value;
         }
     }
 }

@@ -236,9 +236,9 @@ public struct MeshCalculatorJob
 
 
         [BurstCompile]
-        public void Execute(int cubeIndex)
+        public void Execute(int blockIndex)
         {
-            int3 cubePosition = blockPositions[cubeIndex].ToInt3();
+            int3 cubePosition = blockPositions[blockIndex].ToInt3();
 
             BlockPos neighborPositionXPlus  = new BlockPos((sbyte)(cubePosition.x + 1), (byte)cubePosition.y,       (sbyte)cubePosition.z);
             BlockPos neighborPositionXMinus = new BlockPos((sbyte)(cubePosition.x - 1), (byte)cubePosition.y,       (sbyte)cubePosition.z);
@@ -254,7 +254,7 @@ public struct MeshCalculatorJob
             int addedTriangles = 0;
             int addedVertices = 0;
 
-            int cCubeActiveStateIndex = cubeIndex * 6; // 6 faces for each cube
+            int cCubeActiveStateIndex = blockIndex * 6; // 6 faces for each cube
 
 
             #region Add face vertices and triangles if the face is visible
@@ -410,7 +410,7 @@ public struct MeshCalculatorJob
             Interlocked.Add(ref cTriangleIndex, addedTriangles);
 
             
-            if (cubeIndex == (blockPositions.Length - 1))
+            if (blockIndex == (blockPositions.Length - 1))
             {
                 FinilizeJobData();
             }

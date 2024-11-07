@@ -5,6 +5,7 @@ using Unity.Collections;
 using Unity.Mathematics;
 using System.Diagnostics;
 using System.Collections;
+using Unity.Jobs;
 
 
 
@@ -35,84 +36,261 @@ public class Chunk : MonoBehaviour
 
 
 
-
+    public byte[] h;
 
     [BurstCompile]
-    public void LoadChunk(sbyte chunkSize, byte maxChunkHeight, int seed, float scale, int octaves, float persistence, float lacunarity)
+    public void LoadChunk(sbyte chunkSize, byte maxChunkHeight, int seed, float scale, byte octaves, float persistence, float lacunarity)
     {
+        sw = Stopwatch.StartNew();
+
         chunkState = ChunkState.Loaded;
 
         int3 worldPos = new int3((int)transform.position.x, 0, (int)transform.position.z);
         int3 gridPos = worldPos / chunkSize;
 
 
+
+
+        //calculate maxY from every XZ pos, and then fill the arrays...
+
+        #region Calculate Noise Map and BlockPositions
+
         NativeArray<byte> noiseMap = NoiseMapJob.GenerateNoiseMap(chunkSize, maxChunkHeight, seed, scale, octaves, persistence, lacunarity, new int2(worldPos.x, worldPos.z));
 
-        GenerateBlockPos(noiseMap, chunkSize, maxChunkHeight, gridPos);
+        NativeArray<byte> noiseMapStackedYValues = new NativeArray<byte>(chunkSize * chunkSize, Allocator.TempJob);
+
+        NativeArray<int> blockPositions_Amounts = new NativeArray<int>(7, Allocator.TempJob);
+
+
+        CalculateChunkBlockDataJob calculateBlockData = new CalculateChunkBlockDataJob()
+        {
+            noiseMap = noiseMap,
+            noiseMapStackedYValues = noiseMapStackedYValues,
+            blockPositions_Amounts = blockPositions_Amounts,
+
+            chunkSize = chunkSize,
+        };
+
+        JobHandle mainJobHandle = calculateBlockData.Schedule();
+        mainJobHandle.Complete();
+
+        h = noiseMapStackedYValues.ToArray();
+
+        #endregion
+
+
+
+
+        #region Set Block Data To Arrays and ChunkData JobParallel
+
+        NativeArray<BlockPos> blockPositions = new NativeArray<BlockPos>(blockPositions_Amounts[0], Allocator.Persistent);
+
+        NativeArray<BlockPos> blockPositions_Left = new NativeArray<BlockPos>(blockPositions_Amounts[1], Allocator.Persistent);
+        NativeArray<BlockPos> blockPositions_Right = new NativeArray<BlockPos>(blockPositions_Amounts[2], Allocator.Persistent);
+        NativeArray<BlockPos> blockPositions_Bottom = new NativeArray<BlockPos>(blockPositions_Amounts[3], Allocator.Persistent);
+        NativeArray<BlockPos> blockPositions_Top = new NativeArray<BlockPos>(blockPositions_Amounts[4], Allocator.Persistent);
+        NativeArray<BlockPos> blockPositions_Forward = new NativeArray<BlockPos>(blockPositions_Amounts[5], Allocator.Persistent);
+        NativeArray<BlockPos> blockPositions_Back = new NativeArray<BlockPos>(blockPositions_Amounts[6], Allocator.Persistent);
+
+        SetChunkBlockDataJobParallel setBlockData = new SetChunkBlockDataJobParallel()
+        {
+            noiseMap = noiseMap,
+            noiseMapStackedYValues = noiseMapStackedYValues,
+
+            blockPositions = blockPositions,
+
+            blockPositions_Left = blockPositions_Left,
+            blockPositions_Right = blockPositions_Right,
+            blockPositions_Forward = blockPositions_Forward,
+            blockPositions_Back = blockPositions_Back,
+            blockPositions_Top = blockPositions_Top,
+            blockPositions_Bottom = blockPositions_Bottom,
+
+            chunkSize = chunkSize,
+        };
+
+        print(blockPositions.Length);
+
+        mainJobHandle = setBlockData.Schedule(chunkSize * chunkSize, chunkSize * chunkSize);
+        mainJobHandle.Complete();
+
+
+
+        chunkData = new ChunkData(gridPos,
+            blockPositions,
+            blockPositions_Left,
+            blockPositions_Right,
+            blockPositions_Forward,
+            blockPositions_Back,
+            blockPositions_Top,
+            blockPositions_Bottom);
+
+        #endregion
+
+
 
 
         noiseMap.Dispose();
+        noiseMapStackedYValues.Dispose();
+        blockPositions_Amounts.Dispose();
+
+        //print(sw.ElapsedTicks + "ticks");
     }
 
 
-
-    [BurstCompile]
-    private void GenerateBlockPos(NativeArray<byte> noiseMap, sbyte chunkSize, byte maxChunkHeight, int3 gridPos)
+    private struct CalculateChunkBlockDataJob : IJob
     {
-        int chunkSize_Times_MaxHeight = chunkSize * maxChunkHeight;
+        [NoAlias][ReadOnly] public NativeArray<byte> noiseMap;
+        [NoAlias] public NativeArray<byte> noiseMapStackedYValues;
 
-        NativeList<BlockPos> blockPositionsList = new NativeList<BlockPos>(chunkSize * chunkSize_Times_MaxHeight, Allocator.Persistent);
+        [NoAlias] public NativeArray<int> blockPositions_Amounts;
 
-        NativeList<BlockPos> blockPositionsList_Left = new NativeList<BlockPos>(chunkSize_Times_MaxHeight, Allocator.Persistent);
-        NativeList<BlockPos> blockPositionsList_Right = new NativeList<BlockPos>(chunkSize_Times_MaxHeight, Allocator.Persistent);
-        NativeList<BlockPos> blockPositionsList_Forward = new NativeList<BlockPos>(chunkSize_Times_MaxHeight, Allocator.Persistent);
-        NativeList<BlockPos> blockPositionsList_Back = new NativeList<BlockPos>(chunkSize_Times_MaxHeight, Allocator.Persistent);
+        [NoAlias][ReadOnly] public sbyte chunkSize;
+        [NoAlias] private byte cStackedYValue;
 
-        for (sbyte x = 0; x < chunkSize; x++)
+
+        public void Execute()
         {
-            for (sbyte z = 0; z < chunkSize; z++)
+            for (sbyte x = 0; x < chunkSize; x++)
             {
-
-                byte perlinValue = noiseMap[x * chunkSize + z];
-                byte maxY = ClampUnderMax(perlinValue, ClampUnderMax(maxChunkHeight, 255));
-
-                // Add block positions up to the max height
-                for (byte y = 0; y < maxY; y++)
+                for (sbyte z = 0; z < chunkSize; z++)
                 {
-                    sbyte posX = (sbyte)(x + chunkSize);
-                    sbyte posZ = (sbyte)(z + chunkSize);
+                    byte maxY = noiseMap[x * chunkSize + z];
 
-                    if (x == 0)
-                    {
-                        blockPositionsList_Left.Add(new BlockPos(posX, y, posZ));
-                    }
-                    else if (x == chunkSize - 1)
-                    {
-                        blockPositionsList_Right.Add(new BlockPos(posX, y, posZ));
-                    }
-
-                    if (z == 0)
-                    {
-                        blockPositionsList_Forward.Add(new BlockPos(posX, y, posZ));
-                    }
-                    else if (z == chunkSize - 1)
-                    {
-                        blockPositionsList_Back.Add(new BlockPos(posX, y, posZ));
-                    }
+                    cStackedYValue += maxY;
+                    noiseMapStackedYValues[x * chunkSize + z] = cStackedYValue;
 
 
-                    blockPositionsList.Add(new BlockPos(x, y, z));
+                    // Add block positions up to the max height
+                    for (byte y = 0; y < maxY; y++)
+                    {
+                        blockPositions_Amounts[0] += 1;
+
+                        if (x == 0)
+                        {
+                            blockPositions_Amounts[1] += 1;
+                        }
+                        else if (x == chunkSize - 1)
+                        {
+                            blockPositions_Amounts[2] += 1;
+                        }
+
+                        if (y == 0)
+                        {
+                            blockPositions_Amounts[3] += 1;
+                        }
+                        else if (y == chunkSize - 1)
+                        {
+                            blockPositions_Amounts[4] += 1;
+                        }
+
+                        if (z == 0)
+                        {
+                            blockPositions_Amounts[5] += 1;
+                        }
+                        else if (z == chunkSize - 1)
+                        {
+                            blockPositions_Amounts[6] += 1;
+                        }
+                    }
                 }
             }
         }
-
-        chunkData = new ChunkData(gridPos,
-            blockPositionsList.AsArray(),
-            blockPositionsList_Left.AsArray(),
-            blockPositionsList_Right.AsArray(),
-            blockPositionsList_Forward.AsArray(),
-            blockPositionsList_Back.AsArray());
     }
+
+
+
+
+    private struct SetChunkBlockDataJobParallel : IJobParallelFor
+    {
+        [NoAlias][ReadOnly] public NativeArray<byte> noiseMap;
+        [NoAlias][ReadOnly] public NativeArray<byte> noiseMapStackedYValues;
+
+        [NoAlias][WriteOnly] public NativeArray<BlockPos> blockPositions;
+
+
+        [NativeDisableParallelForRestriction]
+        [NoAlias][WriteOnly] public NativeArray<BlockPos> blockPositions_Left;
+
+        [NativeDisableParallelForRestriction]
+        [NoAlias][WriteOnly] public NativeArray<BlockPos> blockPositions_Right;
+
+        [NativeDisableParallelForRestriction]
+        [NoAlias][WriteOnly] public NativeArray<BlockPos> blockPositions_Forward;
+
+        [NativeDisableParallelForRestriction]
+        [NoAlias][WriteOnly] public NativeArray<BlockPos> blockPositions_Back;
+
+        [NativeDisableParallelForRestriction]
+        [NoAlias][WriteOnly] public NativeArray<BlockPos> blockPositions_Top;
+
+        [NativeDisableParallelForRestriction]
+        [NoAlias][WriteOnly] public NativeArray<BlockPos> blockPositions_Bottom;
+
+        [NoAlias][ReadOnly] public sbyte chunkSize;
+
+
+        public void Execute(int blockIndex)
+        {
+            sbyte blockIndexX = (sbyte)(blockIndex % chunkSize);
+            sbyte blockIndexZ = (sbyte)(blockIndex / chunkSize % chunkSize);
+            //18 > 1, 0, 1
+            //4  > 3, 0, 0
+            //64 > 1, 1, 0
+
+
+
+            byte maxY = noiseMap[blockIndex];
+
+
+            for (byte blockIndexY = 0; blockIndexY < maxY; blockIndexY++)
+            {
+                byte targetBlockIndex = (byte)(blockIndexY);
+
+                sbyte posX = (sbyte)(blockIndexX + chunkSize);
+                sbyte posZ = (sbyte)(blockIndexZ + chunkSize);
+
+
+                blockPositions[blockIndex] = new BlockPos(blockIndexX, blockIndexY, blockIndexZ);
+
+
+                if (blockIndexX == 0)
+                {
+                    blockPositions_Left[targetBlockIndex] = new BlockPos(posX, blockIndexY, posZ);
+                }
+                else if (blockIndexX == chunkSize - 1)
+                {
+                    blockPositions_Right[targetBlockIndex] = new BlockPos(posX, blockIndexY, posZ);
+                }
+
+
+                if (blockIndexY == 0)
+                {
+                    blockPositions_Bottom[targetBlockIndex] = new BlockPos(posX, blockIndexY, posZ);
+                }
+                else if (blockIndexY == chunkSize - 1)
+                {
+                    blockPositions_Top[targetBlockIndex] = new BlockPos(posX, blockIndexY, posZ);
+                }
+
+
+                if (blockIndexZ == 0)
+                {
+                    blockPositions_Forward[targetBlockIndex] = new BlockPos(posX, blockIndexY, posZ);
+                }
+                else if (blockIndexZ == chunkSize - 1)
+                {
+                    blockPositions_Back[targetBlockIndex] = new BlockPos(posX, blockIndexY, posZ);
+                }
+            }
+        }
+    }
+
+
+
+
+
+
 
 
     [BurstCompile]
@@ -125,16 +303,7 @@ public class Chunk : MonoBehaviour
 
 
 
-    [BurstCompile]
-    private byte ClampUnderMax(byte value, byte max)
-    {
-        if (value > max)
-        {
-            value = max;
-        }
 
-        return value;
-    }
 
 
 
@@ -294,7 +463,7 @@ public class Chunk : MonoBehaviour
 
 
         //pak waarde 0, 4 van de array
-        float value = example2DArray[indexX *arraySize + indexY];
+        float value = example2DArray[indexX * arraySize + indexY];
 
 
         example2DArray.Dispose();
@@ -315,9 +484,18 @@ public struct ChunkData
     public NativeArray<BlockPos> blockPositions_Right;
     public NativeArray<BlockPos> blockPositions_Forward;
     public NativeArray<BlockPos> blockPositions_Back;
+    public NativeArray<BlockPos> blockPositions_Top;
+    public NativeArray<BlockPos> blockPositions_Bottom;
     
 
-    public ChunkData(int3 _gridPos, NativeArray<BlockPos> _blockPositions, NativeArray<BlockPos> left, NativeArray<BlockPos> right, NativeArray<BlockPos> forward, NativeArray<BlockPos> back)
+    public ChunkData(int3 _gridPos,
+        NativeArray<BlockPos> _blockPositions,
+        NativeArray<BlockPos> left,
+        NativeArray<BlockPos> right,
+        NativeArray<BlockPos> forward,
+        NativeArray<BlockPos> back,
+        NativeArray<BlockPos> top,
+        NativeArray<BlockPos> bottom)
     {
         gridPos = _gridPos;
 
@@ -327,6 +505,8 @@ public struct ChunkData
         blockPositions_Right = right;
         blockPositions_Forward = forward;
         blockPositions_Back = back;
+        blockPositions_Top = top;
+        blockPositions_Bottom = bottom;
     }
 }
 
