@@ -432,7 +432,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   chunkPrefab: {fileID: 9132650834730868430, guid: f3cff2517c04bc84aa029eecc4670552, type: 3}
-  renderDistance: 2
+  renderDistance: 0
 --- !u!1 &963194225
 GameObject:
   m_ObjectHideFlags: 0

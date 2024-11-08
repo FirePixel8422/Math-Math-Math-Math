@@ -6,6 +6,7 @@ using Unity.Mathematics;
 using System.Diagnostics;
 using System.Collections;
 using Unity.Jobs;
+using System.Threading;
 
 
 
@@ -37,7 +38,8 @@ public class Chunk : MonoBehaviour
 
 
     public byte[] h;
-
+    public int[] h2;
+    
     [BurstCompile]
     public void LoadChunk(sbyte chunkSize, byte maxChunkHeight, int seed, float scale, byte octaves, float persistence, float lacunarity)
     {
@@ -57,15 +59,12 @@ public class Chunk : MonoBehaviour
 
         NativeArray<byte> noiseMap = NoiseMapJob.GenerateNoiseMap(chunkSize, maxChunkHeight, seed, scale, octaves, persistence, lacunarity, new int2(worldPos.x, worldPos.z));
 
-        NativeArray<byte> noiseMapStackedYValues = new NativeArray<byte>(chunkSize * chunkSize, Allocator.TempJob);
-
         NativeArray<int> blockPositions_Amounts = new NativeArray<int>(7, Allocator.TempJob);
 
 
         CalculateChunkBlockDataJob calculateBlockData = new CalculateChunkBlockDataJob()
         {
             noiseMap = noiseMap,
-            noiseMapStackedYValues = noiseMapStackedYValues,
             blockPositions_Amounts = blockPositions_Amounts,
 
             chunkSize = chunkSize,
@@ -74,7 +73,9 @@ public class Chunk : MonoBehaviour
         JobHandle mainJobHandle = calculateBlockData.Schedule();
         mainJobHandle.Complete();
 
-        h = noiseMapStackedYValues.ToArray();
+
+
+        h = noiseMap.ToArray();
 
         #endregion
 
@@ -95,21 +96,29 @@ public class Chunk : MonoBehaviour
         SetChunkBlockDataJobParallel setBlockData = new SetChunkBlockDataJobParallel()
         {
             noiseMap = noiseMap,
-            noiseMapStackedYValues = noiseMapStackedYValues,
 
             blockPositions = blockPositions,
 
             blockPositions_Left = blockPositions_Left,
             blockPositions_Right = blockPositions_Right,
+            blockPositions_Bottom = blockPositions_Bottom,
+            blockPositions_Top = blockPositions_Top,
             blockPositions_Forward = blockPositions_Forward,
             blockPositions_Back = blockPositions_Back,
-            blockPositions_Top = blockPositions_Top,
-            blockPositions_Bottom = blockPositions_Bottom,
 
             chunkSize = chunkSize,
         };
 
-        print(blockPositions.Length);
+
+            //h2 = blockPositions_Amounts.ToArray();
+            //print(blockPositions.Length);
+            //print(blockPositions_Left.Length);
+            //print(blockPositions_Right.Length);
+            //print(blockPositions_Bottom.Length);
+            //print(blockPositions_Top.Length);
+            //print(blockPositions_Forward.Length);
+            //print(blockPositions_Back.Length);
+
 
         mainJobHandle = setBlockData.Schedule(chunkSize * chunkSize, chunkSize * chunkSize);
         mainJobHandle.Complete();
@@ -131,34 +140,32 @@ public class Chunk : MonoBehaviour
 
 
         noiseMap.Dispose();
-        noiseMapStackedYValues.Dispose();
         blockPositions_Amounts.Dispose();
 
         //print(sw.ElapsedTicks + "ticks");
     }
 
 
+    [BurstCompile]
     private struct CalculateChunkBlockDataJob : IJob
     {
         [NoAlias][ReadOnly] public NativeArray<byte> noiseMap;
-        [NoAlias] public NativeArray<byte> noiseMapStackedYValues;
 
         [NoAlias] public NativeArray<int> blockPositions_Amounts;
 
         [NoAlias][ReadOnly] public sbyte chunkSize;
-        [NoAlias] private byte cStackedYValue;
 
 
+        [BurstCompile]
         public void Execute()
         {
             for (sbyte x = 0; x < chunkSize; x++)
             {
                 for (sbyte z = 0; z < chunkSize; z++)
                 {
-                    byte maxY = noiseMap[x * chunkSize + z];
+                    int blockIndex = x * chunkSize + z;
 
-                    cStackedYValue += maxY;
-                    noiseMapStackedYValues[x * chunkSize + z] = cStackedYValue;
+                    byte maxY = noiseMap[blockIndex];
 
 
                     // Add block positions up to the max height
@@ -201,11 +208,12 @@ public class Chunk : MonoBehaviour
 
 
 
+    [BurstCompile]
     private struct SetChunkBlockDataJobParallel : IJobParallelFor
     {
         [NoAlias][ReadOnly] public NativeArray<byte> noiseMap;
-        [NoAlias][ReadOnly] public NativeArray<byte> noiseMapStackedYValues;
 
+        [NativeDisableParallelForRestriction]
         [NoAlias][WriteOnly] public NativeArray<BlockPos> blockPositions;
 
 
@@ -229,7 +237,16 @@ public class Chunk : MonoBehaviour
 
         [NoAlias][ReadOnly] public sbyte chunkSize;
 
+        [NoAlias] private int cBlockIndex;
+        [NoAlias] private int cBlockIndex_Left;
+        [NoAlias] private int cBlockIndex_Right;
+        [NoAlias] private int cBlockIndex_Bottom;
+        [NoAlias] private int cBlockIndex_Top;
+        [NoAlias] private int cBlockIndex_Forward;
+        [NoAlias] private int cBlockIndex_Back;
 
+
+        [BurstCompile]
         public void Execute(int blockIndex)
         {
             sbyte blockIndexX = (sbyte)(blockIndex % chunkSize);
@@ -245,42 +262,48 @@ public class Chunk : MonoBehaviour
 
             for (byte blockIndexY = 0; blockIndexY < maxY; blockIndexY++)
             {
-                byte targetBlockIndex = (byte)(blockIndexY);
-
-                sbyte posX = (sbyte)(blockIndexX + chunkSize);
-                sbyte posZ = (sbyte)(blockIndexZ + chunkSize);
+                BlockPos targetBlockPos = new BlockPos(blockIndexX, blockIndexY, blockIndexZ);
 
 
-                blockPositions[blockIndex] = new BlockPos(blockIndexX, blockIndexY, blockIndexZ);
+                blockPositions[cBlockIndex] = targetBlockPos;
+                Interlocked.Increment(ref cBlockIndex);
 
 
                 if (blockIndexX == 0)
                 {
-                    blockPositions_Left[targetBlockIndex] = new BlockPos(posX, blockIndexY, posZ);
+                    blockPositions_Left[cBlockIndex_Left] = targetBlockPos;
+                    Interlocked.Increment(ref cBlockIndex_Left);
                 }
                 else if (blockIndexX == chunkSize - 1)
                 {
-                    blockPositions_Right[targetBlockIndex] = new BlockPos(posX, blockIndexY, posZ);
+                    blockPositions_Right[cBlockIndex_Right] = targetBlockPos;
+                    Interlocked.Increment(ref cBlockIndex_Right);
                 }
 
 
                 if (blockIndexY == 0)
                 {
-                    blockPositions_Bottom[targetBlockIndex] = new BlockPos(posX, blockIndexY, posZ);
+                    blockPositions_Bottom[cBlockIndex_Bottom] = targetBlockPos;
+                    Interlocked.Increment(ref cBlockIndex_Bottom);
                 }
-                else if (blockIndexY == chunkSize - 1)
+                else if (blockIndexY == 255)
                 {
-                    blockPositions_Top[targetBlockIndex] = new BlockPos(posX, blockIndexY, posZ);
+                    blockPositions_Top[cBlockIndex_Top] = targetBlockPos;
+                    Interlocked.Increment(ref cBlockIndex_Top);
                 }
 
 
                 if (blockIndexZ == 0)
                 {
-                    blockPositions_Forward[targetBlockIndex] = new BlockPos(posX, blockIndexY, posZ);
+                    UnityEngine.Debug.Log(cBlockIndex_Forward);
+
+                    blockPositions_Forward[cBlockIndex_Forward] = targetBlockPos;
+                    Interlocked.Increment(ref cBlockIndex_Forward);
                 }
                 else if (blockIndexZ == chunkSize - 1)
                 {
-                    blockPositions_Back[targetBlockIndex] = new BlockPos(posX, blockIndexY, posZ);
+                    blockPositions_Back[cBlockIndex_Back] = targetBlockPos;
+                    Interlocked.Increment(ref cBlockIndex_Back);
                 }
             }
         }
