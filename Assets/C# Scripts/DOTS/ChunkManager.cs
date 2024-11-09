@@ -140,38 +140,46 @@ public class ChunkManager : MonoBehaviour
         }
     }
 
-    public static Stopwatch sw;
+    
+
+
+
+
+
+    private static readonly int3[] directionalOffsets = new int3[]
+    {
+        new int3(-1, 0, 0),     // Left
+        new int3(1, 0, 0),      // Right
+        new int3(0, 1, 0),      // Bottom
+        new int3(0, -1, 0),     // Top
+        new int3(0, 0, -1),     // Forward
+        new int3(0, 0, 1),      // Back
+    };
 
     public static NativeArray<BlockPos> GetConnectedChunkEdgePositionsCount(int3 requesterChunkPos, out JobHandle jobHandle)
     {
         #region Setup Chunk Neigbour Data
 
-        int leftAmount = 0, rightAmount = 0, backAmount = 0, forwardAmount = 0;
+        JobHandle mainJobHandle = new JobHandle();
 
-        int3[] offsets = new int3[]
+        int leftAmount = 0, rightAmount = 0, bottomAmount = 0, topAmount = 0, backAmount = 0, forwardAmount = 0;
+
+
+        NativeArray<BlockPos>[] neighbourBlockPositions = new NativeArray<BlockPos>[6];
+
+        for (byte i = 0; i < 6; i++)
         {
-            new int3(0, 0, -1),   // Front
-            new int3(1, 0, 0),    // Right
-            new int3(0, 0, 1),    // Back
-            new int3(-1, 0, 0)    // Left
-        };
-
-
-        NativeArray<BlockPos>[] neighbourBlockPositions = new NativeArray<BlockPos>[4];
-
-        for (int i = 0; i < offsets.Length; i++)
-        {
-            if (chunks.TryGetValue(requesterChunkPos + offsets[i], out ChunkData chunkDataNeighbor))
+            if (chunks.TryGetValue(requesterChunkPos + directionalOffsets[i], out ChunkData chunkDataNeighbor))
             {
                 switch (i)
                 {
-                    case 0: // Front
+                    case 0: // Left
 
-                        neighbourBlockPositions[i] = chunkDataNeighbor.blockPositions_Back;
-                        forwardAmount = chunkDataNeighbor.blockPositions_Back.Length;
-                        
+                        neighbourBlockPositions[i] = chunkDataNeighbor.blockPositions_Right;
+                        leftAmount = chunkDataNeighbor.blockPositions_Right.Length;
+
                         break;
-                    
+
                     case 1: // Right
 
                         neighbourBlockPositions[i] = chunkDataNeighbor.blockPositions_Left;
@@ -179,28 +187,44 @@ public class ChunkManager : MonoBehaviour
                         
                         break;
 
-                    case 2: // Back
+                    //case 2: // Bottom
+
+                    //    neighbourBlockPositions[i] = chunkDataNeighbor.blockPositions_Top;
+                    //    bottomAmount = chunkDataNeighbor.blockPositions_Top.Length;
+
+                    //    break;
+
+                    //case 3: // Top
+
+                    //    neighbourBlockPositions[i] = chunkDataNeighbor.blockPositions_Bottom;
+                    //    topAmount = chunkDataNeighbor.blockPositions_Bottom.Length;
+
+                    //    break;
+
+                    case 2: // Forward
+
+                        neighbourBlockPositions[i] = chunkDataNeighbor.blockPositions_Back;
+                        forwardAmount = chunkDataNeighbor.blockPositions_Back.Length;
+                        
+                        break;
+                    
+                    case 3: // Back
 
                         neighbourBlockPositions[i] = chunkDataNeighbor.blockPositions_Forward;
                         backAmount = chunkDataNeighbor.blockPositions_Forward.Length;
-                        
-                        break;
-
-                    case 3: // Left
-
-                        neighbourBlockPositions[i] = chunkDataNeighbor.blockPositions_Right;
-                        leftAmount = chunkDataNeighbor.blockPositions_Right.Length;
                         
                         break;
                 }
             }
         }
 
-        int totalAmount = forwardAmount + rightAmount + backAmount + leftAmount;
+        int totalAmount = leftAmount + rightAmount + bottomAmount + topAmount + forwardAmount + backAmount;
 
         #endregion
 
         //40 ticks for setting up neighbour data
+
+
 
 
         NativeArray<BlockPos> connectedChunkEdgePositions = new NativeArray<BlockPos>(totalAmount, Allocator.TempJob);
@@ -215,11 +239,9 @@ public class ChunkManager : MonoBehaviour
             {
                 connectedChunkEdgePositions = connectedChunkEdgePositions,
 
-                blockPositions = neighbourBlockPositions[3],
+                blockPositions = neighbourBlockPositions[0],
 
-                dirModifier = new BlockPos((sbyte)(-staticChunkSize * 2), 0, (sbyte)-staticChunkSize),
-
-                chunkSize = staticChunkSize,
+                dirModifier = new BlockPos((sbyte)-staticChunkSize, 0, 0),
             };
 
             startIndex += leftAmount;
@@ -238,9 +260,7 @@ public class ChunkManager : MonoBehaviour
 
                 startIndex = startIndex,
 
-                dirModifier = new BlockPos(0, 0, (sbyte)-staticChunkSize),
-
-                chunkSize = staticChunkSize,
+                dirModifier = new BlockPos(staticChunkSize, 0, 0),
             };
 
             startIndex += rightAmount;
@@ -249,19 +269,51 @@ public class ChunkManager : MonoBehaviour
         }
 
 
+        /*if (bottomAmount != 0)
+        {
+            AddConnectedChunkEdgeJobParallel addConnectedChunkEdgesForward = new AddConnectedChunkEdgeJobParallel()
+            {
+                connectedChunkEdgePositions = connectedChunkEdgePositions,
+
+                blockPositions = neighbourBlockPositions[2],
+
+                startIndex = startIndex,
+            };
+
+            startIndex += bottomAmount;
+
+            jobHandle = JobHandle.CombineDependencies(addConnectedChunkEdgesForward.Schedule(bottomAmount, bottomAmount, mainJobHandle), jobHandle);
+        }
+
+
+        if (topAmount != 0)
+        {
+            AddConnectedChunkEdgeJobParallel addConnectedChunkEdgesBack = new AddConnectedChunkEdgeJobParallel()
+            {
+                connectedChunkEdgePositions = connectedChunkEdgePositions,
+
+                blockPositions = neighbourBlockPositions[3],
+
+                startIndex = startIndex,
+            };
+
+            startIndex += topAmount;
+
+            jobHandle = JobHandle.CombineDependencies(addConnectedChunkEdgesBack.Schedule(topAmount, topAmount, mainJobHandle), jobHandle);
+        }*/
+
+
         if (forwardAmount != 0)
         {
             AddConnectedChunkEdgeJobParallel addConnectedChunkEdgesForward = new AddConnectedChunkEdgeJobParallel()
             {
                 connectedChunkEdgePositions = connectedChunkEdgePositions,
 
-                blockPositions = neighbourBlockPositions[0],
+                blockPositions = neighbourBlockPositions[2],
 
                 startIndex = startIndex,
 
-                dirModifier = new BlockPos((sbyte)-staticChunkSize, 0, (sbyte)(-staticChunkSize * 2)),
-
-                chunkSize = staticChunkSize,
+                dirModifier = new BlockPos(0, 0, (sbyte)-staticChunkSize),
             };
 
             startIndex += forwardAmount;
@@ -276,18 +328,20 @@ public class ChunkManager : MonoBehaviour
             {
                 connectedChunkEdgePositions = connectedChunkEdgePositions,
 
-                blockPositions = neighbourBlockPositions[2],
+                blockPositions = neighbourBlockPositions[3],
 
                 startIndex = startIndex,
 
-                dirModifier = new BlockPos((sbyte)-staticChunkSize, 0, 0),
-
-                chunkSize = staticChunkSize,
+                dirModifier = new BlockPos(0, 0, staticChunkSize),
             };
 
             jobHandle = JobHandle.CombineDependencies(addConnectedChunkEdgesBack.Schedule(backAmount, backAmount), jobHandle);
         }
         //250 ticks per job
+
+
+
+
 
         return connectedChunkEdgePositions;
     }
@@ -307,8 +361,6 @@ public class ChunkManager : MonoBehaviour
         [NoAlias][ReadOnly] public int startIndex;
 
         [NoAlias][ReadOnly] public BlockPos dirModifier;
-
-        [NoAlias][ReadOnly] public sbyte chunkSize;
 
 
         [BurstCompile]

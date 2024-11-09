@@ -55,7 +55,7 @@ public class ChunkRenderer : MonoBehaviour
     private void Update()
     {
         Vector3 xzPos = new Vector3(transform.position.x, 0, transform.position.z);
-
+        
         if (Vector3.Distance(xzPos, lastPlayerPosition) > chunkSize)
         {
             lastPlayerPosition = xzPos;
