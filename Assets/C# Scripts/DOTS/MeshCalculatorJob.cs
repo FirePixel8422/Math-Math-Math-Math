@@ -199,7 +199,7 @@ public struct MeshCalculatorJob
         {
             BlockPos gridPosition = blockPositions[index];
 
-            blockPositionsMap.TryAdd(gridPosition, 0);
+            blockPositionsMap.Add(gridPosition, 0);
         }
     }
 
@@ -246,7 +246,6 @@ public struct MeshCalculatorJob
             BlockPos neighborPositionYMinus = new BlockPos((sbyte)cubePosition.x,       (byte)(cubePosition.y - 1), (sbyte)cubePosition.z);
             BlockPos neighborPositionZPlus  = new BlockPos((sbyte)cubePosition.x,       (byte)cubePosition.y,       (sbyte)(cubePosition.z + 1));
             BlockPos neighborPositionZMinus = new BlockPos((sbyte)cubePosition.x,       (byte)cubePosition.y,       (sbyte)(cubePosition.z - 1));
-
 
 
 

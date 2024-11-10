@@ -30,7 +30,7 @@ public class Chunk : MonoBehaviour
     [BurstCompile]
     public void Init(byte _isRenderEdgeChunk)
     {
-        ChunkManager.Instance.AddChunksToQue(this);
+        ChunkManager.AddChunksToQue(this);
 
         isRenderEdgeChunk = _isRenderEdgeChunk;
     }
@@ -70,11 +70,6 @@ public class Chunk : MonoBehaviour
 
         JobHandle mainJobHandle = calculateBlockData.Schedule();
         mainJobHandle.Complete();
-
-        if (isRenderEdgeChunk == 0)
-        {
-            print(sw.ElapsedTicks + "ticks final result total");
-        }
 
         #endregion
 
@@ -129,11 +124,6 @@ public class Chunk : MonoBehaviour
 
         noiseMap.Dispose();
         blockPositions_Amounts.Dispose();
-
-        if (isRenderEdgeChunk == 0)
-        {
-            print(sw.ElapsedTicks + "ticks final result total");
-        }
     }
 
 

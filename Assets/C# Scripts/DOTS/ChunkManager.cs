@@ -69,7 +69,7 @@ public class ChunkManager : MonoBehaviour
     }
 
 
-    public void AddChunksToQue(Chunk chunk)
+    public static void AddChunksToQue(Chunk chunk)
     {
         if (chunkList.Contains(chunk) == false)
         {
@@ -146,12 +146,12 @@ public class ChunkManager : MonoBehaviour
 
 
 
-    private static readonly int3[] directionalOffsets = new int3[]
+    private static readonly int3[] directionalOffsets = new int3[4]
     {
         new int3(-1, 0, 0),     // Left
         new int3(1, 0, 0),      // Right
-        new int3(0, 1, 0),      // Bottom
-        new int3(0, -1, 0),     // Top
+        //new int3(0, 1, 0),      // Bottom
+        //new int3(0, -1, 0),     // Top
         new int3(0, 0, -1),     // Forward
         new int3(0, 0, 1),      // Back
     };
@@ -160,14 +160,12 @@ public class ChunkManager : MonoBehaviour
     {
         #region Setup Chunk Neigbour Data
 
-        JobHandle mainJobHandle = new JobHandle();
-
-        int leftAmount = 0, rightAmount = 0, bottomAmount = 0, topAmount = 0, backAmount = 0, forwardAmount = 0;
+        int leftAmount = 0, rightAmount = 0, backAmount = 0, forwardAmount = 0;
 
 
-        NativeArray<BlockPos>[] neighbourBlockPositions = new NativeArray<BlockPos>[6];
+        NativeArray<BlockPos>[] neighbourBlockPositions = new NativeArray<BlockPos>[4];
 
-        for (byte i = 0; i < 6; i++)
+        for (byte i = 0; i < directionalOffsets.Length; i++)
         {
             if (chunks.TryGetValue(requesterChunkPos + directionalOffsets[i], out ChunkData chunkDataNeighbor))
             {
@@ -218,7 +216,7 @@ public class ChunkManager : MonoBehaviour
             }
         }
 
-        int totalAmount = leftAmount + rightAmount + bottomAmount + topAmount + forwardAmount + backAmount;
+        int totalAmount = leftAmount + rightAmount + forwardAmount + backAmount;
 
         #endregion
 
