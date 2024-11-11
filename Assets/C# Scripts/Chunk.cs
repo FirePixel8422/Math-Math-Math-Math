@@ -41,7 +41,7 @@ public class Chunk : MonoBehaviour
     [BurstCompile]
     public void LoadChunk(sbyte chunkSize, byte maxChunkHeight, int seed, float scale, byte octaves, float persistence, float lacunarity)
     {
-        sw = Stopwatch.StartNew();
+        //sw = Stopwatch.StartNew();
 
         chunkState = ChunkState.Loaded;
 

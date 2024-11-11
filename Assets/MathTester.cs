@@ -4,6 +4,7 @@ using Unity.Burst;
 using Unity.Entities.UniversalDelegates;
 using UnityEngine;
 
+[BurstCompile]
 public class MathTester : MonoBehaviour
 {
     public int cycles;
