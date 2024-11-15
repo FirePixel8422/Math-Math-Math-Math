@@ -12,8 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 74adab7e3a851fd48b331787265a1f9f, type: 3}
   m_Name: Chaos FR
   m_EditorClassIdentifier: 
-  maxChunkHeight: 256
+  maxChunkHeight: 255
+  subChunkHeight: 16
   scale: 1
   octaves: 20
   persistence: 0.1
   lacunarity: 1
+  typeOfChunkToGenerate: 1

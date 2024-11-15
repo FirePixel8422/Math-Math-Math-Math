@@ -22,11 +22,12 @@ public class Chunk : MonoBehaviour
 
     public ChunkState chunkState;
 
+    public GameObject subChunkHolder;
 
-
+    private List<GameObject> subChunks = new List<GameObject>();
 
     public byte isRenderEdgeChunk;
-
+    public bool isRenderEdge;
     [BurstCompile]
     public void Init(byte _isRenderEdgeChunk)
     {
@@ -39,8 +40,9 @@ public class Chunk : MonoBehaviour
 
 
     [BurstCompile]
-    public void LoadChunk(sbyte chunkSize, byte maxChunkHeight, int seed, float scale, byte octaves, float persistence, float lacunarity)
+    public void LoadChunk(sbyte chunkSize, byte maxChunkHeight, int seed, float scale, byte octaves, float persistence, float lacunarity, int subChunkHeight, GenerationType generationType)
     {
+        if(generationType == GenerationType.sub) { CreateSubChunks(maxChunkHeight, subChunkHeight); return; }
         //sw = Stopwatch.StartNew();
 
         chunkState = ChunkState.Loaded;
@@ -125,8 +127,15 @@ public class Chunk : MonoBehaviour
         noiseMap.Dispose();
         blockPositions_Amounts.Dispose();
     }
-
-
+    [BurstCompile]
+    public void CreateSubChunks(int maxChunkHeight, int subChunkHeight)
+    {
+        int amountOfSubChunks = (int)math.round(maxChunkHeight / subChunkHeight);
+        for(int i = 0; i < amountOfSubChunks; i++)
+        {
+            subChunks.Add(Instantiate(subChunkHolder, new Vector3(transform.position.x, transform.position.y + subChunkHeight * i, transform.position.z), Quaternion.identity, gameObject.transform));
+        }
+    }
 
 
     [BurstCompile]
@@ -332,7 +341,7 @@ public class Chunk : MonoBehaviour
     public bool drawMeshEdgesGizmos;
     public bool drawChunkGizmos;
     public bool drawNeigbourConnectionsGizmos;
-
+    public bool drawSubChunks;
     private void OnDrawGizmos()
     {
         if (debugMode == false)
@@ -340,6 +349,13 @@ public class Chunk : MonoBehaviour
             return;
         }
 
+        if (drawSubChunks)
+        {
+            for (int i = 0; i < subChunks.Count; i++)
+            {
+                Gizmos.DrawWireCube(subChunks[i].transform.position, new Vector3(16, 16, 16));
+            }
+        }
 
         Vector3 transformPos = transform.position;
 

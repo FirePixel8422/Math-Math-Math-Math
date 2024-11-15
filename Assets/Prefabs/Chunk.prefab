@@ -127,7 +127,10 @@ MonoBehaviour:
   meshFilter: {fileID: 5034534840836416473}
   meshCollider: {fileID: 4923432470865119043}
   chunkState: 0
+  generationType: 0
+  subChunkHolder: {fileID: 6378612608563299273, guid: 97b3ece5913932547a18038a9dbf2090, type: 3}
   isRenderEdgeChunk: 0
+  isRenderEdge: 0
   debugVerts: []
   debugTris: 
   blockDebug: []

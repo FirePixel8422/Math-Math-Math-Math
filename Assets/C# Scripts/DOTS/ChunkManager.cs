@@ -95,7 +95,7 @@ public class ChunkManager : MonoBehaviour
 
                     if (chunkList[chunksLoaded].chunkState == ChunkState.Unloaded)
                     {
-                        chunkList[chunksLoaded].LoadChunk(chunkSize, bs.maxChunkHeight, seed, bs.scale, bs.octaves, bs.persistence, bs.lacunarity);
+                        chunkList[chunksLoaded].LoadChunk(chunkSize, bs.maxChunkHeight, seed, bs.scale, bs.octaves, bs.persistence, bs.lacunarity, bs.subChunkHeight, bs.typeOfChunkToGenerate);
 
                         chunks.TryAdd(chunkList[chunksLoaded].chunkData.gridPos, chunkList[chunksLoaded].chunkData);
                     }

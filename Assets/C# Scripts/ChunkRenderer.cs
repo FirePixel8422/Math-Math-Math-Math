@@ -4,7 +4,6 @@ using Unity.Burst;
 using Unity.Mathematics;
 using UnityEngine;
 
-
 [BurstCompile]
 public class ChunkRenderer : MonoBehaviour
 {
@@ -13,15 +12,14 @@ public class ChunkRenderer : MonoBehaviour
     public int renderDistance;
 
 
-
     private Vector3 lastPlayerPosition;
-    private int chunkSize;
+    public int chunkSize;
+
+
     //private int halfChunkSize;
 
     private HashSet<Chunk> chunksList;
     private HashSet<int3> chunksPosList;
-
-
 
     [BurstCompile]
     private void Start()
