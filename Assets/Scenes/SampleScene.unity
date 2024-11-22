@@ -770,15 +770,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9d03d63d60f1e0747b824b4894c10c5d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  chunkCount: 0
-  chunksLoaded: 0
-  chunksRendered: 0
   chunkLoadCallsPerFrame: 250
   chunkRenderCallsPerFrame: 15
+  TEST_chunkListQuadrantSize: 256
   chunkSize: 16
   seed: 7
   reSeedOnStart: 0
   bs: {fileID: 11400000, guid: f5e84502083dcab43b279c0035a00840, type: 2}
+  chunkCount: 0
+  chunksLoaded: 0
+  chunksRendered: 0
 --- !u!4 &1407568655
 Transform:
   m_ObjectHideFlags: 0

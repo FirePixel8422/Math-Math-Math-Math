@@ -21,15 +21,18 @@ public class Chunk : MonoBehaviour
     public MeshCollider meshCollider;
 
     public ChunkState chunkState;
+    public ChunkRenderParamaters renderParamaters;
 
     public GameObject subChunkHolder;
 
     private List<GameObject> subChunks = new List<GameObject>();
 
-    public byte isRenderEdgeChunk;
+    public bool isRenderEdgeChunk;
     public bool isRenderEdge;
+
+
     [BurstCompile]
-    public void Init(byte _isRenderEdgeChunk)
+    public void Init(bool _isRenderEdgeChunk)
     {
         ChunkManager.AddChunksToQue(this);
 
@@ -40,7 +43,7 @@ public class Chunk : MonoBehaviour
 
 
     [BurstCompile]
-    public void LoadChunk(sbyte chunkSize, byte maxChunkHeight, int seed, float scale, byte octaves, float persistence, float lacunarity, int subChunkHeight, GenerationType generationType)
+    public void ForceLoadChunk(sbyte chunkSize, byte maxChunkHeight, int seed, float scale, byte octaves, float persistence, float lacunarity, int subChunkHeight, GenerationType generationType)
     {
         if(generationType == GenerationType.sub) { CreateSubChunks(maxChunkHeight, subChunkHeight); return; }
         //sw = Stopwatch.StartNew();
@@ -127,6 +130,8 @@ public class Chunk : MonoBehaviour
         noiseMap.Dispose();
         blockPositions_Amounts.Dispose();
     }
+
+
     [BurstCompile]
     public void CreateSubChunks(int maxChunkHeight, int subChunkHeight)
     {
@@ -307,9 +312,19 @@ public class Chunk : MonoBehaviour
 
 
     [BurstCompile]
-    public void RenderChunk()
+    public void ForceRenderChunk()
     {
+        //instantly render chunk and make main thread wait untill completion
+
+        MeshCalculatorJob.CallGenerateMeshJob(chunkData.gridPos, ref chunkData.blockPositions, meshFilter.mesh, meshCollider);
+
         chunkState = ChunkState.Rendered;
+    }
+
+    [BurstCompile]
+    public void AsyncRenderChunk()
+    {
+        //render chunk in background and dont affect fps by not freezing the main thread
 
         MeshCalculatorJob.CallGenerateMeshJob(chunkData.gridPos, ref chunkData.blockPositions, meshFilter.mesh, meshCollider);
     }
@@ -533,9 +548,8 @@ public struct ChunkData
 public enum Blocks : byte
 {
     dirt = 1,
-    oak =2,
-
-birch = 3
+    oak = 2,
+    birch = 3
 }
 
 public enum ChunkState : byte
@@ -544,3 +558,9 @@ public enum ChunkState : byte
     Loaded,
     Rendered,
 };
+
+public enum ChunkRenderParamaters : byte
+{
+    ForceRender,
+    AsyncRender
+}

@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Threading;
 using Unity.Burst;
 using Unity.Collections;
-using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
@@ -10,10 +9,11 @@ using UnityEngine.Rendering;
 
 
 [BurstCompile]
-public unsafe struct MeshCalculatorJob
+public struct MeshCalculatorJob
 {
     private static NativeArray<float3> cubeVertices;
     public static Stopwatch sw;
+
 
     public static void Init()
     {
@@ -28,6 +28,7 @@ public unsafe struct MeshCalculatorJob
         cubeVertices[6] = new float3(0.5f, 0.5f, 0.5f);     // Vertex 6
         cubeVertices[7] = new float3(-0.5f, 0.5f, 0.5f);    // Vertex 7
     }
+
 
 
 

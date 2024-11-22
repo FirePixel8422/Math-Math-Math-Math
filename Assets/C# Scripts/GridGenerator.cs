@@ -26,7 +26,7 @@ public class GridGenerator : MonoBehaviour
         {
             for (int z = 0; z < lenght; z++)
             {
-              Instantiate(chunkGO, new Vector3(x * chunkSize, 0, z * chunkSize), Quaternion.identity, gameObject.transform).GetComponent<Chunk>().Init(new byte());
+                Instantiate(chunkGO, new Vector3(x * chunkSize, 0, z * chunkSize), Quaternion.identity, gameObject.transform).GetComponent<Chunk>().Init(false);
             }
             yield return new WaitForSeconds(gridGenDelay);
         }

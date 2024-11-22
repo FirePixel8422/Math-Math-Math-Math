@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -22,19 +23,16 @@ public class ChunkManager : MonoBehaviour
 
     private static List<Chunk> chunkList;
 
-    public int chunkCount;
-    public int chunksLoaded;
-    public int chunksRendered;
 
-    [Header("")]
+    [Header("Chunk Load And Render Config")]
     public int chunkLoadCallsPerFrame;
-
     public int chunkRenderCallsPerFrame;
 
+    public int TEST_chunkListQuadrantSize;
 
-    [Header("")]
+
+    [Header("World Gen Config")]
     public sbyte chunkSize;
-
     public static sbyte staticChunkSize;
 
     public int seed;
@@ -42,9 +40,17 @@ public class ChunkManager : MonoBehaviour
 
     public BiomeSettingsSO bs;
 
+
+    [Header("DebugData")]
+    public int chunkCount;
+    public int chunksLoaded;
+    public int chunksRendered;
+
     private static NativeHashMap<int3, ChunkData> chunks;
 
     private Unity.Mathematics.Random random;
+
+
 
 
     [BurstCompile]
@@ -52,18 +58,14 @@ public class ChunkManager : MonoBehaviour
     {
         if (reSeedOnStart)
         {
+            random = new Unity.Mathematics.Random((uint)System.DateTime.Now.Ticks);
             seed = random.NextInt(-1000000, 1000001);
         }
 
         staticChunkSize = chunkSize;
 
-        Chunk[] chunkArray = FindObjectsOfType<Chunk>();
-
-        chunkList = new List<Chunk>(chunkArray.Length);
-
-        chunkList.AddRange(chunkArray);
-
-        chunks = new NativeHashMap<int3, ChunkData>(chunkArray.Length, Allocator.Persistent);
+        chunkList = new List<Chunk>(100);
+        chunks = new NativeHashMap<int3, ChunkData>(TEST_chunkListQuadrantSize, Allocator.Persistent);
 
         StartCoroutine(CallChunks());
     }
@@ -95,7 +97,7 @@ public class ChunkManager : MonoBehaviour
 
                     if (chunkList[chunksLoaded].chunkState == ChunkState.Unloaded)
                     {
-                        chunkList[chunksLoaded].LoadChunk(chunkSize, bs.maxChunkHeight, seed, bs.scale, bs.octaves, bs.persistence, bs.lacunarity, bs.subChunkHeight, bs.typeOfChunkToGenerate);
+                        chunkList[chunksLoaded].ForceLoadChunk(chunkSize, bs.maxChunkHeight, seed, bs.scale, bs.octaves, bs.persistence, bs.lacunarity, bs.subChunkHeight, bs.typeOfChunkToGenerate);
 
                         chunks.TryAdd(chunkList[chunksLoaded].chunkData.gridPos, chunkList[chunksLoaded].chunkData);
                     }
@@ -120,9 +122,9 @@ public class ChunkManager : MonoBehaviour
             {
                 for (int i = 0; i < chunkRenderCallsPerFrame; i++)
                 {
-                    if (chunkList[0].chunkState == ChunkState.Loaded && chunkList[0].isRenderEdgeChunk == 0)
+                    if (chunkList[0].chunkState == ChunkState.Loaded && chunkList[0].isRenderEdgeChunk == false)
                     {
-                        chunkList[0].RenderChunk();
+                        chunkList[0].ForceRenderChunk();
                     }
 
                     chunksRendered += 1;
@@ -140,11 +142,76 @@ public class ChunkManager : MonoBehaviour
         }
     }
 
-    
 
 
 
 
+    private int cChunkIndex;
+
+    private ChunkManagerSetupState chunkManagerSetupState;
+    public enum ChunkManagerSetupState : byte
+    {
+        Loading,
+        Rendering
+    }
+
+
+    [BurstCompile]
+    private void Update()
+    {
+        if (chunkManagerSetupState == ChunkManagerSetupState.Loading)
+        {
+            LoadChunks();
+        }
+
+        else if (chunkManagerSetupState == ChunkManagerSetupState.Rendering)
+        {
+            RenderChunks();
+        }
+
+
+
+
+        [BurstCompile]
+        void LoadChunks()
+        {
+            for (int i = 0; i < chunkLoadCallsPerFrame; i++)
+            {
+                if (cChunkIndex == chunkList.Count)
+                {
+                    chunkManagerSetupState = ChunkManagerSetupState.Rendering;
+                    cChunkIndex = 0;
+
+                    break;
+                }
+
+                cChunkIndex += 1;
+            }
+        }
+
+        [BurstCompile]
+        void RenderChunks()
+        {
+            for (int i = 0; i < chunkRenderCallsPerFrame; i++)
+            {
+                if (cChunkIndex == chunkList.Count)
+                {
+                    chunkManagerSetupState = ChunkManagerSetupState.Loading;
+                    cChunkIndex = 0;
+
+                    break;
+                }
+
+                cChunkIndex += 1;
+            }
+        }
+    }
+
+
+
+
+
+    #region GetConnectedChunkEdges
 
     private static readonly int3[] directionalOffsets = new int3[4]
     {
@@ -367,4 +434,6 @@ public class ChunkManager : MonoBehaviour
             connectedChunkEdgePositions[startIndex + index] = new BlockPos((sbyte)(blockPositions[index].x + dirModifier.x), blockPositions[index].y, (sbyte)(blockPositions[index].z + dirModifier.z));
         }
     }
+
+    #endregion
 }
