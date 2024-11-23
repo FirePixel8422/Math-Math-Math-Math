@@ -434,8 +434,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   chunkPrefab: {fileID: 9132650834730868430, guid: f3cff2517c04bc84aa029eecc4670552, type: 3}
-  renderDistance: 1
-  chunkSize: 0
+  renderDistance: 10
 --- !u!114 &812930780
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -777,9 +776,8 @@ MonoBehaviour:
   seed: 7
   reSeedOnStart: 0
   bs: {fileID: 11400000, guid: f5e84502083dcab43b279c0035a00840, type: 2}
-  chunkCount: 0
-  chunksLoaded: 0
-  chunksRendered: 0
+  chunkListCount: 0
+  chunkManagerSetupState: 0
 --- !u!4 &1407568655
 Transform:
   m_ObjectHideFlags: 0
@@ -973,7 +971,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7542816956783058893}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fcf5bcbe29e6b8f4b8ed18c6281dd836, type: 3}
   m_Name: 

@@ -22,6 +22,7 @@ public class ChunkManager : MonoBehaviour
 
 
     private static List<Chunk> chunkList;
+    private static List<Chunk> chunkListMarkedForLoading;
 
 
     [Header("Chunk Load And Render Config")]
@@ -39,12 +40,6 @@ public class ChunkManager : MonoBehaviour
     public bool reSeedOnStart;
 
     public BiomeSettingsSO bs;
-
-
-    [Header("DebugData")]
-    public int chunkCount;
-    public int chunksLoaded;
-    public int chunksRendered;
 
     private static NativeHashMap<int3, ChunkData> chunks;
 
@@ -67,6 +62,8 @@ public class ChunkManager : MonoBehaviour
         chunkList = new List<Chunk>(100);
         chunks = new NativeHashMap<int3, ChunkData>(TEST_chunkListQuadrantSize, Allocator.Persistent);
 
+        chunkManagerSetupState = ChunkManagerSetupState.Loading;
+
         StartCoroutine(CallChunks());
     }
 
@@ -87,8 +84,8 @@ public class ChunkManager : MonoBehaviour
         {
             yield return new WaitUntil(() => chunkList.Count > 0);
 
-            chunkCount = chunkList.Count;
-            chunksLoaded = 0;
+            int chunkCount = chunkList.Count;
+            int chunksLoaded = 0;
 
             while (chunkCount > chunksLoaded)
             {
@@ -127,8 +124,6 @@ public class ChunkManager : MonoBehaviour
                         chunkList[0].ForceRenderChunk();
                     }
 
-                    chunksRendered += 1;
-
                     chunkList.RemoveAt(0);
 
                     if (chunkList.Count == 0)
@@ -147,21 +142,42 @@ public class ChunkManager : MonoBehaviour
 
 
     private int cChunkIndex;
+    public int chunkListCount;
+    private JobHandle chunkJobHandle;
 
-    private ChunkManagerSetupState chunkManagerSetupState;
+
+    public ChunkManagerSetupState chunkManagerSetupState;
     public enum ChunkManagerSetupState : byte
     {
+        Idle,
         Loading,
         Rendering
     }
 
 
+
+
     [BurstCompile]
     private void Update()
     {
+        return;
+
+
         if (chunkManagerSetupState == ChunkManagerSetupState.Loading)
         {
-            LoadChunks();
+            if (chunkListCount != 0)
+            {
+                LoadChunks();
+            }
+            else if (chunkList.Count > 0)
+            {
+                chunkListMarkedForLoading = new List<Chunk>(chunkList);
+                chunkList.Clear();
+
+                chunkListCount = chunkListMarkedForLoading.Count;
+
+                LoadChunks();
+            }
         }
 
         else if (chunkManagerSetupState == ChunkManagerSetupState.Rendering)
@@ -175,9 +191,13 @@ public class ChunkManager : MonoBehaviour
         [BurstCompile]
         void LoadChunks()
         {
+            //call chunkLoadCallsPerFrame amount of chunks for loading
             for (int i = 0; i < chunkLoadCallsPerFrame; i++)
             {
-                if (cChunkIndex == chunkList.Count)
+                chunkListMarkedForLoading[cChunkIndex].ForceLoadChunk(chunkSize, bs.maxChunkHeight, seed, bs.scale, bs.octaves, bs.persistence, bs.lacunarity, bs.subChunkHeight, bs.typeOfChunkToGenerate);
+
+                //if all chunks that still have to load are called for loading, return and start rendering all the loaded chunks
+                if (cChunkIndex == chunkListCount - 1)
                 {
                     chunkManagerSetupState = ChunkManagerSetupState.Rendering;
                     cChunkIndex = 0;
@@ -189,20 +209,36 @@ public class ChunkManager : MonoBehaviour
             }
         }
 
+
         [BurstCompile]
         void RenderChunks()
         {
-            for (int i = 0; i < chunkRenderCallsPerFrame; i++)
+            //only if chunks are currently called for rendering, check if all jobs are finished
+            if (chunkJobHandle.IsCompleted)
             {
-                if (cChunkIndex == chunkList.Count)
+
+                //call chunkRenderCallsPerFrame amount of chunks for rendering
+                for (int i = 0; i < chunkRenderCallsPerFrame; i++)
                 {
-                    chunkManagerSetupState = ChunkManagerSetupState.Loading;
-                    cChunkIndex = 0;
+                    JobHandle mainJobHandle = new JobHandle();
 
-                    break;
+                    chunkListMarkedForLoading[cChunkIndex].ForceRenderChunk();
+
+                    chunkJobHandle = JobHandle.CombineDependencies(chunkJobHandle, mainJobHandle);
+
+
+                    //if all chunks that still have to render are called for rendering, return and start loading new batch of chunks
+                    if (cChunkIndex == chunkListCount - 1)
+                    {
+                        chunkManagerSetupState = ChunkManagerSetupState.Loading;
+                        chunkListCount = 0;
+                        cChunkIndex = 0;
+
+                        break;
+                    }
+
+                    cChunkIndex += 1;
                 }
-
-                cChunkIndex += 1;
             }
         }
     }

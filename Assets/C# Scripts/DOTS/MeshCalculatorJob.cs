@@ -1,9 +1,11 @@
+using System.Collections;
 using System.Diagnostics;
 using System.Threading;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -249,7 +251,229 @@ public struct MeshCalculatorJob
         #endregion
     }
 
+    public static IEnumerator CallGenerateMeshJobAsync(int3 chunkGridPos, NativeArray<BlockPos> blockPositions, Mesh mesh, MeshCollider coll, JobHandle mainJobHandle)
+    {
+        #region Data Creation
 
+        JobHandle jobHandle1 = new JobHandle();
+
+        int blockPositionsLength = blockPositions.Length;
+
+        NativeHashMap<BlockPos, byte> blockPositionsMap = new NativeHashMap<BlockPos, byte>(blockPositionsLength, Allocator.TempJob);
+
+        NativeReference<int2> calcVertexTriangleCount = new NativeReference<int2>(Allocator.TempJob);
+
+        NativeArray<int2> rawVertexTriangleIndexs = new NativeArray<int2>(blockPositionsLength, Allocator.TempJob);
+        NativeArray<int2> vertexTriangleIndexs = new NativeArray<int2>(blockPositionsLength, Allocator.TempJob);
+
+
+        NativeArray<float3> vertices = new NativeArray<float3>(blockPositionsLength * 8, Allocator.TempJob);
+
+        NativeArray<int> triangles = new NativeArray<int>(blockPositionsLength * 36, Allocator.TempJob);
+
+        //NativeParallelHashMap<float3, int> existingVerticesMap = new NativeParallelHashMap<float3, int>(blockPositionsLength * 8, Allocator.TempJob);
+
+
+        NativeArray<ushort> textureIndexs = new NativeArray<ushort>(blockPositionsLength, Allocator.TempJob);
+
+        NativeArray<byte> cubeFacesActiveState = new NativeArray<byte>(blockPositionsLength * 6, Allocator.TempJob);
+
+        #endregion
+        //13000 ticks
+
+
+
+
+        #region SetupData Job
+
+        AddArrayToHashMapJobParallel setupDataJobParallel = new AddArrayToHashMapJobParallel
+        {
+            blockPositions = blockPositions,
+            blockPositionsMap = blockPositionsMap,
+        };
+
+        jobHandle1 = setupDataJobParallel.Schedule(blockPositionsLength, blockPositionsLength);
+        mainJobHandle = JobHandle.CombineDependencies(mainJobHandle, jobHandle1);
+
+        #endregion
+        //7000 ticks
+
+
+
+        #region Calculate ConnectedChunks Edge Positions Job
+
+        NativeArray<BlockPos> connectedChunkEdgePositions = ChunkManager.GetConnectedChunkEdgePositionsCount(chunkGridPos, out JobHandle edgesJobHandle);
+
+        AddArrayToHashMapJobParallel calculateChunkConnectionsJobParallel = new AddArrayToHashMapJobParallel
+        {
+            blockPositions = connectedChunkEdgePositions,
+            blockPositionsMap = blockPositionsMap,
+        };
+
+        jobHandle1 = JobHandle.CombineDependencies(jobHandle1, edgesJobHandle);
+        jobHandle1 = JobHandle.CombineDependencies(jobHandle1, calculateChunkConnectionsJobParallel.Schedule(connectedChunkEdgePositions.Length, connectedChunkEdgePositions.Length, jobHandle1));
+        mainJobHandle = JobHandle.CombineDependencies(mainJobHandle, jobHandle1);
+
+        #endregion
+
+        //210 ticks for adding connected chunk edges
+
+
+
+
+        #region GenerateMeshCubes Job
+
+        PreCalculate_GenerateMeshCubesJobParallel preCalculate_GenerateMeshCubesJobParallel = new PreCalculate_GenerateMeshCubesJobParallel
+        {
+            blockPositions = blockPositions,
+            blockPositionsMap = blockPositionsMap,
+
+            cubeFacesActiveState = cubeFacesActiveState,
+
+            vertexTriangleIndexs = rawVertexTriangleIndexs,
+        };
+
+        jobHandle1 = preCalculate_GenerateMeshCubesJobParallel.Schedule(blockPositionsLength, blockPositionsLength, jobHandle1);
+        mainJobHandle = JobHandle.CombineDependencies(mainJobHandle, jobHandle1);
+
+
+        PreCalculate_VertexTriangleCountAndIndexs preCalculate_VertexTriangleCountAndIndexs = new PreCalculate_VertexTriangleCountAndIndexs
+        {
+            calcVertexTriangleCount = calcVertexTriangleCount,
+
+            rawVertexTriangleIndexs = rawVertexTriangleIndexs,
+            vertexTriangleIndexs = vertexTriangleIndexs,
+        };
+
+        jobHandle1 = preCalculate_VertexTriangleCountAndIndexs.Schedule(jobHandle1);
+        mainJobHandle = JobHandle.CombineDependencies(mainJobHandle, jobHandle1);
+
+
+
+
+        GenerateMeshCubesJobParallel generateMeshCubesJob = new GenerateMeshCubesJobParallel
+        {
+            blockPositions = blockPositions,
+
+            vertices = vertices,
+            triangles = triangles,
+
+            vertexTriangleIndexs = vertexTriangleIndexs,
+
+            cubeFacesActiveState = cubeFacesActiveState,
+
+            cubeVertices = cubeVertices,
+        };
+
+        jobHandle1 = generateMeshCubesJob.Schedule(blockPositionsLength, blockPositionsLength, jobHandle1);
+        mainJobHandle = JobHandle.CombineDependencies(mainJobHandle, jobHandle1);
+
+
+        yield return new WaitUntil(() => mainJobHandle.IsCompleted);
+
+        #endregion
+
+        //1000 ticks for Calculating verts, tris, facesAtciveState, textureIndexs > On Main thread :(
+        //*/
+
+
+
+
+        /*#region GenerateMeshCubes Job V2
+
+        GenerateMeshCubesJobParallel_V2 generateMeshCubesJob_V2 = new GenerateMeshCubesJobParallel_V2
+        {
+            blockPositions = blockPositions,
+            blockPositionsMap = blockPositionsMap,
+
+            calcVertexTriangleCount = calcVertexTriangleCount,
+
+            vertices = vertices,
+            
+            triangles = triangles,
+
+            existingVerticesMap = existingVerticesMap,
+
+            cubeFacesActiveState = cubeFacesActiveState,
+
+            cubeVertices = cubeVertices,
+        };
+
+        mainJobHandle = generateMeshCubesJob_V2.Schedule(blockPositionsLength, blockPositionsLength, mainJobHandle);
+
+        mainJobHandle.Complete();
+
+        #endregion*/
+
+
+
+
+        #region Filter Vertices And Triangles
+
+        int vertexCount = calcVertexTriangleCount.Value.x;
+        NativeArray<float3> filteredVertices = new NativeArray<float3>(vertexCount, Allocator.TempJob);
+
+        FilterVerticesJobParallel filterVerticesJob = new FilterVerticesJobParallel
+        {
+            vertices = vertices,
+            filteredVertices = filteredVertices,
+        };
+
+        int triangleCount = calcVertexTriangleCount.Value.y;
+        NativeArray<int> filteredTriangles = new NativeArray<int>(triangleCount, Allocator.TempJob);
+
+        FilterTrianglesJobParallel filterTrianglesJob = new FilterTrianglesJobParallel
+        {
+            triangles = triangles,
+            filteredTriangles = filteredTriangles,
+        };
+
+
+        mainJobHandle = filterVerticesJob.Schedule(vertexCount, vertexCount);
+        mainJobHandle = JobHandle.CombineDependencies(filterTrianglesJob.Schedule(triangleCount, triangleCount), mainJobHandle);
+
+
+        yield return new WaitUntil(() => mainJobHandle.IsCompleted);
+
+
+        vertices.Dispose();
+        triangles.Dispose();
+
+        //8000 ticks for filtering verts and tris
+
+        #endregion
+
+        //750 ticks for filtering tris and verts
+
+
+
+
+        ApplyMeshToObject(filteredVertices, filteredTriangles, cubeFacesActiveState, textureIndexs, mesh, coll);
+
+
+
+
+        #region Dispose All Native Containers That Are Done Being Used After ApplyMeshToObject
+
+        blockPositions.Dispose();
+        blockPositionsMap.Dispose();
+
+        calcVertexTriangleCount.Dispose();
+
+        rawVertexTriangleIndexs.Dispose();
+        vertexTriangleIndexs.Dispose();
+
+        textureIndexs.Dispose();
+
+        cubeFacesActiveState.Dispose();
+
+        filteredVertices.Dispose();
+        filteredTriangles.Dispose();
+
+        connectedChunkEdgePositions.Dispose();
+
+        #endregion
+    }
 
 
 

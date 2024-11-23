@@ -322,11 +322,10 @@ public class Chunk : MonoBehaviour
     }
 
     [BurstCompile]
-    public void AsyncRenderChunk()
+    public void AsyncRenderChunk(JobHandle mainJobHandle)
     {
         //render chunk in background and dont affect fps by not freezing the main thread
-
-        MeshCalculatorJob.CallGenerateMeshJob(chunkData.gridPos, ref chunkData.blockPositions, meshFilter.mesh, meshCollider);
+        StartCoroutine(MeshCalculatorJob.CallGenerateMeshJobAsync(chunkData.gridPos, chunkData.blockPositions, meshFilter.mesh, meshCollider, mainJobHandle));
     }
 
 

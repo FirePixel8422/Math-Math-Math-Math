@@ -13,7 +13,7 @@ public class ChunkRenderer : MonoBehaviour
 
 
     private Vector3 lastPlayerPosition;
-    public int chunkSize;
+    private int chunkSize;
 
 
     //private int halfChunkSize;
