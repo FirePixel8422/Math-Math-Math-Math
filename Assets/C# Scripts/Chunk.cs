@@ -326,6 +326,8 @@ public class Chunk : MonoBehaviour
     {
         //render chunk in background and dont affect fps by not freezing the main thread
         StartCoroutine(MeshCalculatorJob.CallGenerateMeshJobAsync(chunkData.gridPos, chunkData.blockPositions, meshFilter.mesh, meshCollider, mainJobHandle));
+
+        chunkState = ChunkState.Rendered;
     }
 
 

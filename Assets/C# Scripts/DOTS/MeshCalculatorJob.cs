@@ -1435,6 +1435,7 @@ public struct MeshCalculatorJob
         mesh.SetSubMesh(0, new SubMeshDescriptor(0, triangles.Length));
 
         mesh.RecalculateBounds();
+        mesh.RecalculateNormals();
 
         mesh.SetUVs(0, uvs);
         mesh.SetUVs(1, textureData);

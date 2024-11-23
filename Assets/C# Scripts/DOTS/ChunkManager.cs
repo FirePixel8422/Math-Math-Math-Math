@@ -29,6 +29,8 @@ public class ChunkManager : MonoBehaviour
     public int chunkLoadCallsPerFrame;
     public int chunkRenderCallsPerFrame;
 
+
+    public bool TEST_useAsyncLoading;
     public int TEST_chunkListQuadrantSize;
 
 
@@ -64,7 +66,10 @@ public class ChunkManager : MonoBehaviour
 
         chunkManagerSetupState = ChunkManagerSetupState.Loading;
 
-        StartCoroutine(CallChunks());
+        if (TEST_useAsyncLoading == false)
+        {
+            StartCoroutine(CallChunks());
+        }
     }
 
 
@@ -160,8 +165,10 @@ public class ChunkManager : MonoBehaviour
     [BurstCompile]
     private void Update()
     {
-        return;
-
+        if (TEST_useAsyncLoading == false)
+        {
+            return;
+        }
 
         if (chunkManagerSetupState == ChunkManagerSetupState.Loading)
         {
