@@ -1419,6 +1419,8 @@ public struct MeshCalculatorJob
         //9000 ticks
 
 
+        mesh.Clear();
+
         if (vertices.Length > 65535)
         {
             mesh.indexFormat = IndexFormat.UInt32;

@@ -45,7 +45,7 @@ MeshRenderer:
   m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
+  m_DynamicOccludee: 0
   m_StaticShadowCaster: 1
   m_MotionVectors: 2
   m_LightProbeUsage: 1
@@ -84,7 +84,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 9132650834730868430}
-  m_Mesh: {fileID: 0}
+  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!64 &4923432470865119043
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -127,6 +127,7 @@ MonoBehaviour:
   meshFilter: {fileID: 5034534840836416473}
   meshCollider: {fileID: 4923432470865119043}
   chunkState: 0
+  renderParamaters: 0
   subChunkHolder: {fileID: 6378612608563299273, guid: 97b3ece5913932547a18038a9dbf2090, type: 3}
   isRenderEdgeChunk: 0
   isRenderEdge: 0

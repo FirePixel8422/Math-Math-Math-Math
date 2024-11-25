@@ -328,6 +328,7 @@ public class Chunk : MonoBehaviour
         StartCoroutine(MeshCalculatorJob.CallGenerateMeshJobAsync(chunkData.gridPos, chunkData.blockPositions, meshFilter.mesh, meshCollider, mainJobHandle));
 
         chunkState = ChunkState.Rendered;
+        renderParamaters = ChunkRenderParamaters.AsyncRender;
     }
 
 
@@ -557,6 +558,7 @@ public enum ChunkState : byte
 {
     Unloaded,
     Loaded,
+    HalfRendered,
     Rendered,
 };
 

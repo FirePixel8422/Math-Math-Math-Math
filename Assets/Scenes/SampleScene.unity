@@ -434,7 +434,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   chunkPrefab: {fileID: 9132650834730868430, guid: f3cff2517c04bc84aa029eecc4670552, type: 3}
-  renderDistance: 2
+  renderDistance: 5
+  TEST_useSphericalRendering: 1
+  TEST_useForwardRendering: 0
 --- !u!114 &812930780
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -769,8 +771,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9d03d63d60f1e0747b824b4894c10c5d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  chunkLoadCallsPerFrame: 250
-  chunkRenderCallsPerFrame: 15
+  chunkLoadCallsPerFrame: 300
+  chunkRenderCallsPerFrame: 20
   TEST_useAsyncLoading: 0
   TEST_chunkListQuadrantSize: 256
   chunkSize: 16
